@@ -1,0 +1,111 @@
+package httpLogic
+
+import (
+  "net/http"
+  "structs"
+  "regexp"
+  "log"
+  "kvsAccess"
+  "strings"
+  "net/url"
+)
+
+var _ip = regexp.MustCompile(`(\d+\.){3}(\d+)`)
+var _port = regexp.MustCompile(`\d{4}`)
+// parses http.Request in view_update context
+func ViewUpdateForm(r *http.Request) (structs.ViewUpdateForm) {
+  r.ParseForm()
+  IpPort := r.FormValue("ip_port")
+  ip := _ip.FindString(IpPort)
+  port := _port.FindString(IpPort)
+  viewUpdateType := r.FormValue("type")
+  viewUpdateForm := structs.ViewUpdateForm{viewUpdateType, ip, port}
+  viewType, viewExists := r.URL.Query()["type"]
+  if viewExists { viewUpdateForm.Type = viewType[0] }
+  return viewUpdateForm
+}
+// parses http.Request in PUT kvs context
+func PutForm(r *http.Request) (structs.PutForm) {
+  r.ParseForm()
+  key := r.FormValue("key")
+  value := r.FormValue("val")
+  return structs.PutForm{key, value}
+}
+// parses http.Request in repartition context
+func PartitionForm(r *http.Request) ([]structs.KeyValue) {
+  var kvArr []structs.KeyValue
+  r.ParseForm()
+  keys := r.PostForm["key"]
+  vals := r.PostForm["val"]
+  for i, k := range keys {
+    kvArr = append(kvArr, structs.KeyValue{k, vals[i]})
+  }
+  return kvArr
+}
+
+type kv struct{
+  key   string
+  value string
+}
+
+// func CustomRequest(method string, header kv, URL string, formData []kv) *http.Request {
+//   form := url.Values{}
+//   for _, kv := range formData {
+//     form.Add(kv.key, kv.value)
+//   }
+//   formJSON := form.Encode()  
+//   req, _ := http.NewRequest(http.MethodPut, URL, strings.NewReader(formJSON))
+//   req.Header.Add(header.key, header.value)
+//   return req
+// }
+
+// creates http.Request array to notify all nodes of view_update
+func NotifyNodes(self structs.IpPort, viewForm structs.ViewUpdateForm, view []structs.IpPort) ([]*http.Request) {
+  var requestStore []*http.Request
+
+  for _, v := range view {
+    tempIp := v.Ip
+    tempPort := v.Port
+    if self.Ip != tempIp {
+      URL := "http://" + tempIp+":"+tempPort + "/partition"
+      
+      // var formData = []kv {
+      //   kv { key  : "ip_port", value: viewForm.Ip+":"+viewForm.Port, },
+      //   kv { key  : "type", value: viewForm.Type, },
+      // }
+      // var header = kv { key  :"Content-Type", value:"application/x-www-form-urlencoded", }      
+      // var req = CustomRequest("PUT", header, URL, formData)
+
+      form := url.Values{}
+      form.Add("ip_port", viewForm.Ip+":"+viewForm.Port)
+      form.Add("type", viewForm.Type)
+      formJSON := form.Encode()
+      req, _ := http.NewRequest(http.MethodPut, URL, strings.NewReader(formJSON))
+      req.Header.Add("Content-Type", "application/x-www-form-urlencoded")
+      
+      requestStore = append(requestStore, req)
+    }
+  }
+  return requestStore
+}
+// return http.Request array
+  // for sending all repartitioned keys to their corresponding nodes
+func CreatePartitionRequests(requestMap map[string]*kvsAccess.KeyValStore) ([]*http.Request) {
+  var requestStore []*http.Request
+  for k, v := range requestMap {
+    form := url.Values{}
+    for k1, v1 := range v.Store {
+      form.Add("key", k1)
+      form.Add("val", v1)
+    }
+    formJSON := form.Encode()
+    url := "http://" + k + "/repartition"
+    req, err := http.NewRequest(http.MethodPut, url, strings.NewReader(formJSON))
+    if err != nil {
+      log.Panic(err)
+    }
+    req.Header.Add("Content-Type", "application/x-www-form-urlencoded")
+    requestStore = append(requestStore, req)
+  }
+  return requestStore
+}
