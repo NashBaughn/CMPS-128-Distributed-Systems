@@ -192,14 +192,20 @@ func numKeys(w http.ResponseWriter, r *http.Request) {
 	w.Write(respBody)
 }
 
+// Sends all View Info to new node
 func sendUpdate(update structs.ViewUpdateForm) {
 	Ip := update.Ip
 	Port := update.Port
 	URL := "http://" + Ip + ":" + Port + "/viewchange"
 	form := url.Values{}
-	for _, node := range _view {
-		form.Add("Ip", node.Ip)
-		form.Add("Port", node.Port)
+	form.Add("my_Ip", Ip)
+	form.Add("K", _K)
+	for _, part := range _view {
+		for _, node := range part {
+			form.Add("Ip", node.Ip)
+			form.Add("Port", node.Port)
+			form.Add("Id", node.Id)
+		}
 	}
 	formJSON := form.Encode()
 	req, _ := http.NewRequest(http.MethodPut, URL, strings.NewReader(formJSON))
@@ -209,18 +215,26 @@ func sendUpdate(update structs.ViewUpdateForm) {
 	errPanic(err)
 }
 
+// Recreates View table and sets node Info
 func addNode(w http.ResponseWriter, r *http.Request) {
 	r.ParseForm()
+	my_Ip := r.PostForm["my_Ip"]
 	Ip := r.PostForm["Ip"]
 	Port := r.PostForm["Port"]
+	Id := r.PostForm["Id"]
+
+	_view = make([][]structs.NodeInfo, math.Ceil(float(len(ips))/float(_K)))
 	for i, P := range Ip {
-		_view = append(_view, structs.IpPort{P, Port[i]})
+		temp := structs.NodeInfo{P, Port[i], Id[i]}
+		if my_Ip == P {
+			_my_node = temp
+		}
+		View[Id[i]] = append(View[Id[i]], temp)
 	}
 	respBody := structs.PartitionResp{"success"}
 	bodyBytes, _ := json.Marshal(respBody)
 	w.WriteHeader(200)
 	w.Write(bodyBytes)
-
 }
 
 func customPrint() {
