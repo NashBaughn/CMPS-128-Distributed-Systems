@@ -41,7 +41,7 @@ func Start() {
 	router.HandleFunc("/kvs", newSet).Methods("POST", "PUT")
 	router.HandleFunc("/kvs", newGet).Methods("GET")
 	router.HandleFunc("/kvs", newDel).Methods("DELETE")
-	router.HandleFunc("/kvs/view_update", viewUpdate).Methods("PUT")
+	router.HandleFunc("/kvs/view_update", sendViewUpdate).Methods("PUT")
 	router.HandleFunc("/repartition", repartitionHandler).Methods("PUT")
 	router.HandleFunc("/partition", partitionHandler).Methods("PUT")
 	router.HandleFunc("/viewchange", addNode).Methods("PUT")
@@ -97,24 +97,25 @@ func keyValid(key string) bool {
 	return true
 }
 
-// returns index of ip in _view
-// needs case for when len(view) == 1 ?
-func findViewIndex(ip string) int {
+// returns index of partition containing
+// ip in _view, or -1 if does not exist
+func findPartition(ip string) (int, int) {
 	// log.Print("findViewIndex! ip: "+ip)
-	for i := 0; i < len(_view); i++ {
-		if _view[i].Ip == ip {
-			return i
+	for i, part := range _view {
+		for j, node := range part {
+			if (node.Ip == ip) return (i, j)
 		}
 	}
-	return -1
+	return (-1, -1)
 }
 
-// removes an element form _view
-func removeView(s int) {
-	if (len(_view) - 1) == s {
-		_view = _view[:s]
+// removes an element from _view
+func removeView(i int, j int) {
+	Part = _view[i]
+	if (len(Part) - 1) == j {
+		Part = Part[:j]
 	} else {
-		_view = append(_view[:s], _view[s+1:]...)
+		Part = append(Part[:j], Part[j+1:]...)
 	}
 }
 
@@ -134,11 +135,9 @@ func errPanicStr(cond bool, err string) {
 // 				 Endpoint Handlers				   //
 // // // // // // // // // // // // // //
 
-// PUT Handler for view updates
-// This is all in the process of being changed - Riizus
-func viewUpdate(w http.ResponseWriter, r *http.Request) {
+// PUT Handler for sending view updates
+func sendViewUpdate(w http.ResponseWriter, r *http.Request) {
 	// parse request and get relevant info (key, value, view_update, type, ip_port)
-	w.Header().Set("Content-Type", "application/json")
 	postForm := httpLogic.ViewUpdateForm(r)
 	// notify all nodes
 	requestList := httpLogic.NotifyNodes(_ip_port, postForm, _view)
@@ -150,36 +149,12 @@ func viewUpdate(w http.ResponseWriter, r *http.Request) {
 		_, err := client.Do(req)
 		errPanic(err)
 	}
-	// if node_addition
+	// if adding new node send updated view table
 	if postForm.Type == "add" {
-		// update view
-		_view = append(_view, structs.IpPort{postForm.Ip, postForm.Port})
 		sendUpdate(postForm)
-	} else {
-		// update view
-		viewIndex := findViewIndex(postForm.Ip)
-		errPanicStr(viewIndex != -1, "ip does not exist!")
-		removeView(viewIndex)
 	}
-	// repartition all keys in kvs
-	requestMap := partition.Repartition(findViewIndex(_ip_port.Ip), _view, _KVS)
-	requestList = httpLogic.CreatePartitionRequests(requestMap)
-	// send requests to nodes for repartitioned keys
-	for _, req := range requestList {
-		client := &http.Client{Timeout: time.Second}
-		_, err := client.Do(req)
-		errPanic(err)
-	}
-	// test prints after view_update
-	log.Print("view after view_update: ")
-	for _, v := range _view {
-		log.Print(v.Ip + ":" + v.Port)
-	}
-	// response logic
-	respBody := structs.PartitionResp{"success"}
-	bodyBytes, _ := json.Marshal(respBody)
-	w.WriteHeader(200)
-	w.Write(bodyBytes)
+	// Reuses partition logic
+	partitionHandler(w, r)
 }
 
 // number of keys Handler
@@ -251,29 +226,37 @@ func customPrint() {
 
 }
 
-// Internal endpoint for handling partition notification
+// Internal endpoint for handling View Update
 func partitionHandler(w http.ResponseWriter, r *http.Request) {
-	ipPort := _ip_port.Ip + ":" + _ip_port.Port
-	log.Print("partitionHandler: " + ipPort)
-	log.Print(ipPort + " view: ")
-	for _, v := range _view {
-		log.Print(v.Ip + ":" + v.Port)
-	}
-
 	// parse request and get relevant info (key, value, view_update, type, ip_port)
 	postForm := httpLogic.ViewUpdateForm(r)
-	// if node_addition
 	if postForm.Type == "add" {
 		// update view
-		_view = append(_view, structs.IpPort{postForm.Ip, postForm.Port})
+		for i, part := range _view {
+			if (len(part) < _k) {
+				part = append(part, structs.NodeInfo{postForm.Ip, postForm.Port, i})
+				break
+			}
+			if (i+1 == len(_view)) {
+				new_part = []structs.NodeInfo{structs.NodeInfo{postForm.Ip, postForm.Port, i+1}}
+				_view = append(_view, new_part)
+				sendRepartition()
+			}
+		}
 	} else {
 		// update view
-		viewIndex := findViewIndex(postForm.Ip)
-		errPanicStr(viewIndex != -1, "ip does not exist!: "+postForm.Ip)
-		removeView(viewIndex)
+		partIndex, nodeIndex := findPartition(postForm.Ip)
+		errPanicStr(partIndex != -1, "ip does not exist!: "+postForm.Ip)
+		removeView(partIndex, nodeIndex)
+		if (len(_view[partIndex]) == 0) {
+			sendRepartition()
+		}
 	}
-	// repartition all keys in kvs
-	requestMap := partition.Repartition(findViewIndex(_ip_port.Ip), _view, _KVS)
+}
+
+// repartition all keys in kvs and sends to new partition
+func sendRepartition() {
+	requestMap := partition.Repartition(findPartition(_my_node.Ip), _view, _KVS)
 	requestList := httpLogic.CreatePartitionRequests(requestMap)
 	// send requests to nodes for repartitioned keys
 	for _, req := range requestList {
@@ -291,7 +274,7 @@ func partitionHandler(w http.ResponseWriter, r *http.Request) {
 	w.Write(bodyBytes)
 }
 
-// Internal endpoint for handling repartition request body and kvs manipulations
+// Internal endpoint for handling repartition request and kvs manipulations
 func repartitionHandler(w http.ResponseWriter, r *http.Request) {
 	log.Print("repartitionHandler")
 	partForm := httpLogic.PartitionForm(r)
@@ -327,7 +310,7 @@ func newSet(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// key belongs to this node
-	if partition.KeyBelongs(key, findViewIndex(_ip_port.Ip), _view) {
+	if partition.KeyBelongs(key, findPartition(_ip_port.Ip), _view) {
 		var resp string
 		// check validitiy of key
 		if !keyValid(key) {
@@ -410,7 +393,7 @@ func newGet(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// if key belongs to node
-	if partition.KeyBelongs(key[0], findViewIndex(_ip_port.Ip), _view) {
+	if partition.KeyBelongs(key[0], findPartition(_ip_port.Ip), _view) {
 		get := structs.GET{"blah", "blah", _ip_port.Ip + ":" + _ip_port.Port}
 		if !keyValid(key[0]) {
 			w.WriteHeader(401)
@@ -486,7 +469,7 @@ func newDel(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// if key belongs to node
-	if partition.KeyBelongs(key[0], findViewIndex(_ip_port.Ip), _view) {
+	if partition.KeyBelongs(key[0], findPartition(_ip_port.Ip), _view) {
 		del := structs.DELExists{"success", _ip_port.Ip + ":" + _ip_port.Port}
 		// check validity of key
 		if !keyValid(key[0]) {
