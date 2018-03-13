@@ -140,7 +140,7 @@ func sendViewUpdate(w http.ResponseWriter, r *http.Request) {
 	// parse request and get relevant info (key, value, view_update, type, ip_port)
 	postForm := httpLogic.ViewUpdateForm(r)
 	// notify all nodes
-	requestList := httpLogic.NotifyNodes(_ip_port, postForm, _view)
+	requestList := httpLogic.NotifyNodes(_my_node, postForm, _view)
 	for _, req := range requestList {
 		client := &http.Client{Timeout: time.Second}
 		// req.ParseForm()
@@ -256,16 +256,19 @@ func partitionHandler(w http.ResponseWriter, r *http.Request) {
 
 // repartition all keys in kvs and sends to new partition
 func sendRepartition() {
-	requestMap := partition.Repartition(findPartition(_my_node.Ip), _view, _KVS)
-	requestList := httpLogic.CreatePartitionRequests(requestMap)
-	// send requests to nodes for repartitioned keys
-	for _, req := range requestList {
-		client := &http.Client{
-			Timeout: time.Second,
+	requestMap := partition.Repartition(findPartition(_my_node.Id), _view, _KVS)
+	// Only send requests if the first alive node in partition
+	//
+		requestList := httpLogic.CreatePartitionRequests(requestMap)
+		// send requests to nodes for repartitioned keys
+		for _, req := range requestList {
+			client := &http.Client{
+				Timeout: time.Second,
+			}
+			_, err := client.Do(req)
+			errPanic(err)
 		}
-		_, err := client.Do(req)
-		errPanic(err)
-	}
+	//
 	// respond with status
 	respBody := structs.PartitionResp{"success"}
 	bodyBytes, _ := json.Marshal(respBody)
@@ -279,9 +282,9 @@ func repartitionHandler(w http.ResponseWriter, r *http.Request) {
 	log.Print("repartitionHandler")
 	partForm := httpLogic.PartitionForm(r)
 	// kvs storage
-	for _, v := range partForm {
-		log.Print("key: " + v.Key + " value: " + v.Value + " STORED!")
-		_KVS.SetValue(v.Key, v.Value)
+	for key, val := range partForm {
+		log.Print("key: " + key + " value: " + val + " STORED!")
+		_KVS.SetValue(key, val)
 	}
 	// respond with status
 	respBody := structs.PartitionResp{"success"}
@@ -294,7 +297,7 @@ func repartitionHandler(w http.ResponseWriter, r *http.Request) {
 // new PUT handler for kvs manipulations
 func newSet(w http.ResponseWriter, r *http.Request) {
 	// var initialization
-	put := structs.PUT{0, "yolo", _ip_port.Ip + ":" + _ip_port.Port}
+	put := structs.PUT{0, "yolo", _my_node.Ip + ":" + _my_node.Port}
 	postForm := httpLogic.PutForm(r)
 	key := postForm.Key
 	value := postForm.Key
@@ -310,7 +313,7 @@ func newSet(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// key belongs to this node
-	if partition.KeyBelongs(key, findPartition(_ip_port.Ip), _view) {
+	if partition.KeyBelongs(key, findPartition(_my_node.Ip), _view) {
 		var resp string
 		// check validitiy of key
 		if !keyValid(key) {
@@ -393,8 +396,8 @@ func newGet(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// if key belongs to node
-	if partition.KeyBelongs(key[0], findPartition(_ip_port.Ip), _view) {
-		get := structs.GET{"blah", "blah", _ip_port.Ip + ":" + _ip_port.Port}
+	if partition.KeyBelongs(key[0], findPartition(_my_node.Ip), _view) {
+		get := structs.GET{"blah", "blah", _my_node.Ip + ":" + _my_node.Port}
 		if !keyValid(key[0]) {
 			w.WriteHeader(401)
 			getError := structs.ERROR{"key is empty", "keyError"}
@@ -469,8 +472,8 @@ func newDel(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// if key belongs to node
-	if partition.KeyBelongs(key[0], findPartition(_ip_port.Ip), _view) {
-		del := structs.DELExists{"success", _ip_port.Ip + ":" + _ip_port.Port}
+	if partition.KeyBelongs(key[0], findPartition(_my_node.Ip), _view) {
+		del := structs.DELExists{"success", _my_node.Ip + ":" + _my_node.Port}
 		// check validity of key
 		if !keyValid(key[0]) {
 			w.WriteHeader(401)
