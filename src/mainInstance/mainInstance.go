@@ -61,8 +61,8 @@ var _ip = regexp.MustCompile(`(\d+\.){3}(\d+)`)
 var _port = regexp.MustCompile(`\d{4}`)
 var _n = int((^uint(0)) >> 1)
 
-// converts VIEW string into []structs.IpPort
-func viewToStruct(view string) [][]structs.IpPort {
+// converts VIEW string into []structs.NodeInfo
+func viewToStruct(view string) [][]structs.NodeInfo {
 	my_Ip := _ip.FindString(os.Getenv("ip_port"))
 	ips := _ip.FindAllString(view, _n)
 	ports := _port.FindAllString(view, _n)
@@ -82,10 +82,10 @@ func viewToStruct(view string) [][]structs.IpPort {
 }
 
 // converts ip:port string in structs.IpPort
-func ipToStruct(ipPort string) structs.IpPort {
+func ipToStruct(ipPort string) structs.NodeInfo {
 	ip := _ip.FindString(ipPort)
 	port := _port.FindString(ipPort)
-	return structs.IpPort{ip, port}
+	return structs.NodeInfo{ip, port, -1}
 }
 
 // checks validity of key against constraints

@@ -65,7 +65,7 @@ type kv struct {
 
 // creates http.Request array to notify all nodes of view_update
 // Still needs to be changed
-func NotifyNodes(self structs.IpPort, viewForm structs.ViewUpdateForm, view []structs.IpPort) []*http.Request {
+func NotifyNodes(self structs.NodeInfo, viewForm structs.ViewUpdateForm, view []structs.NodeInfo) []*http.Request {
 	var requestStore []*http.Request
 
 	for _, v := range view {
