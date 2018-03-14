@@ -71,7 +71,7 @@ func viewToStruct(view string) [][]structs.NodeInfo {
 	var View = make([][]structs.NodeInfo, int(math.Ceil(float64(len(ips))/float64(_K))))
 	part_Id := 0
 	for i := 0; i < len(ips); i++ {
-		temp := structs.NodeInfo{ips[i], ports[i], part_Id}
+		temp := structs.NodeInfo{ips[i], ports[i], part_Id, true}
 		if my_Ip == ips[i] {
 			_my_node = temp
 		}
@@ -84,10 +84,11 @@ func viewToStruct(view string) [][]structs.NodeInfo {
 }
 
 // converts ip:port string in structs.IpPort
+// We don't really need this anymore.
 func ipToStruct(ipPort string) structs.NodeInfo {
 	ip := _ip.FindString(ipPort)
 	port := _port.FindString(ipPort)
-	return structs.NodeInfo{ip, port, -1}
+	return structs.NodeInfo{ip, port, -1, true}
 }
 
 // checks validity of key against constraints
@@ -182,6 +183,7 @@ func sendUpdate(update structs.ViewUpdateForm) {
 			form.Add("Ip", node.Ip)
 			form.Add("Port", node.Port)
 			form.Add("Id", string(node.Id))
+			form.Add("Alive", strconv.FormatBool(node.Alive))
 		}
 	}
 	formJSON := form.Encode()
@@ -199,11 +201,14 @@ func addNode(w http.ResponseWriter, r *http.Request) {
 	Ip := r.PostForm["Ip"]
 	Port := r.PostForm["Port"]
 	Id := r.PostForm["Id"]
+	Alive := r.PostForm["Alive"]
+	_K,_ := strconv.Atoi(r.PostForm["K"][0])
 
 	_view = make([][]structs.NodeInfo, int(math.Ceil(float64(len(Ip))/float64(_K))))
 	for i, P := range Ip {
 		id, _ := strconv.Atoi(Id[i])
-		temp := structs.NodeInfo{P, Port[i], id}
+		live, _ := strconv.ParseBool(Alive[i])
+		temp := structs.NodeInfo{P, Port[i], id, live}
 		if (my_Ip[0] == P) {_my_node = temp}
 		_view[id] = append(_view[id], temp)
 	}
@@ -237,11 +242,11 @@ func partitionHandler(w http.ResponseWriter, r *http.Request) {
 		// update view
 		for i, part := range _view {
 			if (len(part) < _K) {
-				part = append(part, structs.NodeInfo{postForm.Ip, postForm.Port, i})
+				part = append(part, structs.NodeInfo{postForm.Ip, postForm.Port, i, true})
 				break
 			}
 			if (i+1 == len(_view)) {
-				new_part := []structs.NodeInfo{structs.NodeInfo{postForm.Ip, postForm.Port, i+1}}
+				new_part := []structs.NodeInfo{structs.NodeInfo{postForm.Ip, postForm.Port, i+1, true}}
 				_view = append(_view, new_part)
 				sendRepartition(w)
 			}
@@ -261,17 +266,23 @@ func partitionHandler(w http.ResponseWriter, r *http.Request) {
 func sendRepartition(w http.ResponseWriter) {
 	requestMap := partition.Repartition(_my_node.Id, _view, _KVS)
 	// Only send requests if the first alive node in partition
-	//
-		requestList := httpLogic.CreatePartitionRequests(requestMap)
-		// send requests to nodes for repartitioned keys
-		for _, req := range requestList {
-			client := &http.Client{
-				Timeout: time.Second,
-			}
-			_, err := client.Do(req)
-			errPanic(err)
+	for _, Head := range _view[_my_node.Id] {
+		if (Head.Alive == false) {
+			continue
 		}
-	//
+		if _my_node == Head {
+			requestList := httpLogic.CreatePartitionRequests(requestMap)
+			// send requests to nodes for repartitioned keys
+			for _, req := range requestList {
+				client := &http.Client{
+					Timeout: time.Second,
+				}
+				_, err := client.Do(req)
+				errPanic(err)
+			}
+		}
+		break
+	}
 	// respond with status
 	respBody := structs.PartitionResp{"success"}
 	bodyBytes, _ := json.Marshal(respBody)

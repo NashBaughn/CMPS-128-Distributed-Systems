@@ -7,6 +7,7 @@ type NodeInfo struct {
 	Ip   string
 	Port string
 	Id   int
+	Alive bool
 }
 
 type ViewUpdateForm struct {
