@@ -69,7 +69,7 @@ func NotifyNodes(self structs.NodeInfo, viewForm structs.ViewUpdateForm, view []
 	var requestStore []*http.Request
 
 	for _, part := range view {
-        for _, node := raange part {
+        for _, node := range part {
     		tempIp := node.Ip
     		tempPort := node.Port
     		if self.Ip != tempIp {

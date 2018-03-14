@@ -46,9 +46,9 @@ func Repartition(index int, view [][]structs.NodeInfo, kvs *kvsAccess.KeyValStor
 	// requestMap initialization
 	// requestMap contains a mapping from all the keys to their new ip:port
 	requestMap := make(map[string]*kvsAccess.KeyValStore)
-    for i, part := range _view {
+    for i, part := range view {
         if (i != index && len(part) != 0) {
-			requestMap[part[0].Ip+":"part[0].Port] = kvsAccess.NewKVS()
+			requestMap[part[0].Ip+":"+part[0].Port] = kvsAccess.NewKVS()
 		}
 	}
 	for k, v := range kvs.Store {
