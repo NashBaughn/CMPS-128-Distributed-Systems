@@ -131,12 +131,12 @@ func removeView(i int, j int) {
 }
 
 // because a lot of error checking occurs
-func errPanic(err error) {
+func ErrPanic(err error) {
 	if err != nil {
 		panic(err)
 	}
 }
-func errPanicStr(cond bool, err string) {
+func ErrPanicStr(cond bool, err string) {
 	if !cond {
 		panic(err)
 	}
@@ -148,16 +148,16 @@ func errPanicStr(cond bool, err string) {
 
 func HBresponse(w http.ResponseWriter, r *http.Request) {
     hb := structs.PartitionResp{"success"}
-    jsonResponse, err = json.Marshal(hb)
-
+    jsonResponse, err := json.Marshal(hb)
+		ErrPanic(err)
     // maybe include view and/or casual order
 
     w.WriteHeader(200)
-    w.Write(hb)
+    w.Write(jsonResponse)
 }
 
 // PUT Handler for sending view updates
-func sendViewUpdate(w http.ResponseWriter, r *http.Request) {
+func SendViewUpdate(w http.ResponseWriter, r *http.Request) {
 	// parse request and get relevant info (key, value, view_update, type, ip_port)
 	postForm := httpLogic.ViewUpdateForm(r)
 	// notify all nodes
@@ -168,21 +168,21 @@ func sendViewUpdate(w http.ResponseWriter, r *http.Request) {
 		log.Print("req: " + req.URL.String())
 		// log.Print("Node being deleted: "+req.PostForm["ip_port"][0])
 		_, err := client.Do(req)
-		errPanic(err)
+		ErrPanic(err)
 	}
 	// if adding new node send updated view table
 	if postForm.Type == "add" {
 		sendUpdate(postForm)
 	}
 	// Reuses partition logic
-	partitionHandler(w, r)
+	PartitionHandler(w, r)
 }
 
 // number of keys Handler
-func numKeys(w http.ResponseWriter, r *http.Request) {
+func NumKeys(w http.ResponseWriter, r *http.Request) {
 	numKeys := structs.NumKeys{_KVS.NumKeys()}
 	respBody, err := json.Marshal(numKeys)
-	errPanic(err)
+	ErrPanic(err)
 	w.WriteHeader(200)
 	w.Header().Set("Content-Type", "application/json")
 	w.Write(respBody)
@@ -209,11 +209,11 @@ func sendUpdate(update structs.ViewUpdateForm) {
 	req.Header.Add("Content-Type", "application/x-www-form-urlencoded")
 	client := &http.Client{}
 	_, err := client.Do(req)
-	errPanic(err)
+	ErrPanic(err)
 }
 
 // Recreates View table and sets node Info
-func addNode(w http.ResponseWriter, r *http.Request) {
+func AddNode(w http.ResponseWriter, r *http.Request) {
 	r.ParseForm()
 	my_Ip := r.PostForm["my_Ip"]
 	Ip := r.PostForm["Ip"]
@@ -253,7 +253,7 @@ func customPrint() {
 }
 
 // Internal endpoint for handling View Update
-func partitionHandler(w http.ResponseWriter, r *http.Request) {
+func PartitionHandler(w http.ResponseWriter, r *http.Request) {
 	// parse request and get relevant info (key, value, view_update, type, ip_port)
 	postForm := httpLogic.ViewUpdateForm(r)
 	if postForm.Type == "add" {
@@ -272,7 +272,7 @@ func partitionHandler(w http.ResponseWriter, r *http.Request) {
 	} else {
 		// update view
 		partIndex, nodeIndex := findPartition(postForm.Ip)
-		errPanicStr(partIndex != -1, "ip does not exist!: "+postForm.Ip)
+		ErrPanicStr(partIndex != -1, "ip does not exist!: "+postForm.Ip)
 		removeView(partIndex, nodeIndex)
 		if (len(_view[partIndex]) == 0) {
 			sendRepartition(w)
@@ -293,7 +293,7 @@ func sendRepartition(w http.ResponseWriter) {
 				Timeout: time.Second,
 			}
 			_, err := client.Do(req)
-			errPanic(err)
+			ErrPanic(err)
 		}
 	}
 	// respond with status
@@ -305,7 +305,7 @@ func sendRepartition(w http.ResponseWriter) {
 }
 
 // Internal endpoint for handling repartition request and kvs manipulations
-func repartitionHandler(w http.ResponseWriter, r *http.Request) {
+func RepartitionHandler(w http.ResponseWriter, r *http.Request) {
 	log.Print("repartitionHandler")
 	partForm := httpLogic.PartitionForm(r)
 	// kvs storage
@@ -322,7 +322,7 @@ func repartitionHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 // new PUT handler for kvs manipulations
-func newSet(w http.ResponseWriter, r *http.Request) {
+func NewSet(w http.ResponseWriter, r *http.Request) {
 	// var initialization
 	put := structs.PUT{0, "yolo", _my_node.Ip + ":" + _my_node.Port}
 	postForm := httpLogic.PutForm(r)
@@ -335,7 +335,7 @@ func newSet(w http.ResponseWriter, r *http.Request) {
 		put.Owner = "undetermined"
 		w.WriteHeader(400)
 		jsonResponse, err := json.Marshal(put)
-		errPanic(err)
+		ErrPanic(err)
 		w.Write(jsonResponse)
 		return
 	}
@@ -365,7 +365,7 @@ func newSet(w http.ResponseWriter, r *http.Request) {
 		}
 		// respond
 		jsonResponse, err := json.Marshal(put)
-		errPanic(err)
+		ErrPanic(err)
 		w.Write(jsonResponse)
 		return
 	}
@@ -374,7 +374,7 @@ func newSet(w http.ResponseWriter, r *http.Request) {
 }
 
 // New GET Handler
-func newGet(w http.ResponseWriter, r *http.Request) {
+func NewGet(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	// parse request for relevant data (key, get_number_of_keys)
 	key, keyExists := r.URL.Query()["key"]
@@ -384,7 +384,7 @@ func newGet(w http.ResponseWriter, r *http.Request) {
 	if !keyExists {
 		get := structs.ERROR{"no key in request", "keyError"}
 		jsonResponse, err = json.Marshal(get)
-		errPanic(err)
+		ErrPanic(err)
 		w.WriteHeader(400)
 		w.Write(jsonResponse)
 		return
@@ -407,7 +407,7 @@ func newGet(w http.ResponseWriter, r *http.Request) {
 			jsonResponse, err = json.Marshal(get)
 		}
 		// response logic
-		errPanic(err)
+		ErrPanic(err)
 		w.Write(jsonResponse)
 		return
 	}
@@ -416,7 +416,7 @@ func newGet(w http.ResponseWriter, r *http.Request) {
 }
 
 // New DELETE Handler
-func newDel(w http.ResponseWriter, r *http.Request) {
+func NewDel(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	// parse request for relevant data (key)
 	key, keyExists := r.URL.Query()["key"]
@@ -426,7 +426,7 @@ func newDel(w http.ResponseWriter, r *http.Request) {
 	if !keyExists {
 		del := structs.ERROR{"no key in request", "keyError"}
 		jsonResponse, err = json.Marshal(del)
-		errPanic(err)
+		ErrPanic(err)
 		w.WriteHeader(400)
 		w.Write(jsonResponse)
 		return
@@ -452,7 +452,7 @@ func newDel(w http.ResponseWriter, r *http.Request) {
 			jsonResponse, err = json.Marshal(del)
 		}
 		// respond to requester
-		errPanic(err)
+		ErrPanic(err)
 		w.Write(jsonResponse)
 		return
 	}
@@ -493,7 +493,7 @@ func genericNotMineResponse(w http.ResponseWriter, r *http.Request, key string, 
 	// Response handling logic
 	defer resp.Body.Close()
 	jsonResponse, err := ioutil.ReadAll(resp.Body)
-	errPanic(err)
+	ErrPanic(err)
 	// Response logic
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(resp.StatusCode)

@@ -13,7 +13,10 @@ import (
 
 // Sends Key Value Store to newly reconnected node in partition
 // Also sends Causal Payload to check if KVS is up to date
-func sendNetworkMend (Node structs.NodeInfo) {
+// author: Alec
+// update: first letter of function to upper case
+// purpose: now it can be exported
+func SendNetworkMend (Node structs.NodeInfo) {
     Ip := Node.Ip
 	Port := Node.Port
 	URL := "http://" + Ip + ":" + Port + "/networkMend"
@@ -37,7 +40,7 @@ func sendNetworkMend (Node structs.NodeInfo) {
 
 // Retrieves new KVS from other node in partition
 // Checks the Causal Payload to see if it is newer than current one
-func handleNetworkMend (w http.ResponseWriter, r *http.Request) {
+func HandleNetworkMend (w http.ResponseWriter, r *http.Request) {
     r.ParseForm()
     Payload := r.PostForm["Payload"]
     newer := true
