@@ -22,10 +22,15 @@ func BeginMonitor(view [][]structs.NodeInfo) {
 }
 
 func CheckNodes(node NodeInfo, view [][]structs.NodeInfo) {
-    for i, row := range view {
-        for j, cell := range row {
-            if(!view[i][j]){
-                view[i][j].alive = false
+    for _, row := range view {
+        for _, node := range row {
+            if(!SendPulse(node)){
+                node.alive = false
+            } else {
+                if(node.alive == false){
+                    partitionMend(node)
+                    node.alive = true
+                }
             }
 
         }
