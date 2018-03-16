@@ -78,7 +78,7 @@ type NumKeys struct {
 // author: Alec
 // scenario: node receives a request asking for the partition_id of itself
 // purpose: response body template for the partition_id request
-type GETPartitionIdResp {
+type GETPartitionIdResp struct {
 	Message string `json:"msg"`
 	Partition_Id int `json:"partition_id"`
 }
@@ -86,7 +86,7 @@ type GETPartitionIdResp {
 // author: Alec
 // scenario: node receives a request asking for a list of partition_ids of the partition it is in
 // purpose: response body template for the partition_id request
-type GETAllPartitionIdsResp {
+type GETAllPartitionIdsResp struct {
 	Message string `json:"msg"`
 	Partition_Id_List []int `json:"partition_id_list"`
 }
@@ -94,7 +94,7 @@ type GETAllPartitionIdsResp {
 // author: Alec
 // scenario: node receives a request asking for the IpPorts of the partition it belongs to
 // purpose: response body template for the partition_id request
-type GETPartitionMembersResp {
+type GETPartitionMembersResp struct {
 	Message string `json:"msg"`
 	Partition_Members []int `json:"partition_members"`
 }

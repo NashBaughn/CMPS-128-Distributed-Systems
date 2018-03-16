@@ -11,8 +11,6 @@ import (
 	"partition"
 	"regexp"
 	"structs"
-
-	"github.com/gorilla/mux"
 	// "strconv"
 	"io/ioutil"
 	"math"
@@ -29,31 +27,12 @@ var _K int
 var _causal_Payload []int
 
 func Start() {
-	// create router instance
-	router := mux.NewRouter()
-
 	//init instance of our global kvs
 	_KVS = kvsAccess.NewKVS()
 
 	// fill global vars with ENV vars
-
 	_view = viewToStruct(os.Getenv("VIEW")) // regex logic in partition
 
-	// designate handler funcs for each endpoint
-	router.HandleFunc("/kvs", newSet).Methods("POST", "PUT")
-	router.HandleFunc("/kvs", newGet).Methods("GET")
-	router.HandleFunc("/kvs", newDel).Methods("DELETE")
-	router.HandleFunc("/kvs/view_update", sendViewUpdate).Methods("PUT")
-	router.HandleFunc("/repartition", repartitionHandler).Methods("PUT")
-	router.HandleFunc("/partition", partitionHandler).Methods("PUT")
-	router.HandleFunc("/viewchange", addNode).Methods("PUT")
-	router.HandleFunc("/networkMend", handleNetworkMend).Methods("PUT")
-	router.HandleFunc("/kvs/get_number_of_keys", numKeys).Methods("GET")
-
-	// listen on port 8080
-	if err := http.ListenAndServe(":8080", router); err != nil {
-		log.Fatal(err)
-	}
 }
 
 // // // // // // // // // // // // // //
@@ -100,6 +79,22 @@ func keyValid(key string) bool {
 		return false
 	}
 	return true
+}
+
+func GetKVS() *kvsAccess.KeyValStore {
+	return _KVS
+}
+
+func SetKVS(newKVS *kvsAccess.KeyValStore) {
+	_KVS = newKVS
+}
+
+func GetPayload() []int {
+	return _causal_Payload
+}
+
+func SetPayload(newPayload []int) {
+	_causal_Payload = newPayload
 }
 
 // returns index of partition containing
@@ -493,58 +488,4 @@ func genericNotMineResponse(w http.ResponseWriter, r *http.Request, key string, 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(resp.StatusCode)
 	w.Write(jsonResponse)
-}
-
-// Sends Key Value Store to newly reconnected node in partition
-// Also sends Causal Payload to check if KVS is up to date
-func sendNetworkMend (Node structs.NodeInfo) {
-    Ip := Node.Ip
-	Port := Node.Port
-	URL := "http://" + Ip + ":" + Port + "/networkMend"
-	form := url.Values{}
-	for key, val := range _KVS {
-		form.Add("Key", key)
-		form.Add("Val", val)
-	}
-    var payload bytes.Buffer
-    for _, val := range _causal_Payload {
-
-        form.Add("Payload", strval)
-    }
-	formJSON := form.Encode()
-	req, _ := http.NewRequest(http.MethodPut, URL, strings.NewReader(formJSON))
-	req.Header.Add("Content-Type", "application/x-www-form-urlencoded")
-	client := &http.Client{}
-	_, err := client.Do(req)
-	errPanic(err)
-}
-
-// Retrieves new KVS from other node in partition
-// Checks the Causal Payload to see if it is newer than current one
-func handleNetworkMend (w http.ResponseWriter, r *http.Request) {
-    r.ParseForm()
-    Payload := r.PostForm["Payload"]
-    newer := true
-    var newPayload []int
-    for ind, my_num := range _causal_Payload {
-        _, new_num := strconv.Atoi(Payload[ind])
-        if my_num > new_num {
-            newer = false
-            break
-        }
-        newPayload[ind] = new_num
-    }
-    if newer {
-        _KVS = NewKVS()
-		keys := r.PostForm["Key"]
-		vals := r.PostForm["Val"]
-        for i, key := range keys {
-            _KVS.SetValue(key, vals[i])
-        }
-        _causal_Payload = newPayload
-    }
-    respBody := structs.PartitionResp{"success"}
-    bodyBytes, _ := json.Marshal(respBody)
-    w.WriteHeader(200)
-    w.Write(bodyBytes)
 }
