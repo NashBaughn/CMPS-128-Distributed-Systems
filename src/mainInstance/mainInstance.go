@@ -146,6 +146,16 @@ func errPanicStr(cond bool, err string) {
 // 				 Endpoint Handlers				   //
 // // // // // // // // // // // // // //
 
+func HBresponse(w http.ResponseWriter, r *http.Request) {
+    hb := structs.PartitionResp{"success"}
+    jsonResponse, err = json.Marshal(hb)
+
+    // maybe include view and/or casual order
+
+    w.WriteHeader(200)
+    w.Write(hb)
+}
+
 // PUT Handler for sending view updates
 func sendViewUpdate(w http.ResponseWriter, r *http.Request) {
 	// parse request and get relevant info (key, value, view_update, type, ip_port)
