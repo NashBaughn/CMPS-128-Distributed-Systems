@@ -42,11 +42,15 @@ func Start() {
 	router.HandleFunc("/kvs", newSet).Methods("POST", "PUT")
 	router.HandleFunc("/kvs", newGet).Methods("GET")
 	router.HandleFunc("/kvs", newDel).Methods("DELETE")
-	router.HandleFunc("/kvs/view_update", sendViewUpdate).Methods("PUT")
+	router.HandleFunc("/kvs/view_update", viewUpdate).Methods("PUT")
+	router.HandleFunc("/kvs/get_number_of_keys", numKeys).Methods("GET")
+
 	router.HandleFunc("/repartition", repartitionHandler).Methods("PUT")
 	router.HandleFunc("/partition", partitionHandler).Methods("PUT")
+
 	router.HandleFunc("/viewchange", addNode).Methods("PUT")
-	router.HandleFunc("/kvs/get_number_of_keys", numKeys).Methods("GET")
+
+	router.HandleFunc("/heartbeat", HBresponse).Methods("GET")
 
 	// listen on port 8080
 	if err := http.ListenAndServe(":8080", router); err != nil {
@@ -136,6 +140,16 @@ func errPanicStr(cond bool, err string) {
 // // // // // // // // // // // // // //
 // 				 Endpoint Handlers				   //
 // // // // // // // // // // // // // //
+
+func HBresponse(w http.ResponseWriter, r *http.Request) {
+    hb := structs.PartitionResp{"success"}
+    jsonResponse, err = json.Marshal(hb)
+    
+    // maybe include view and/or casual order 
+
+    w.WriteHeader(200)
+    w.Write(hb)
+}
 
 // PUT Handler for sending view updates
 func sendViewUpdate(w http.ResponseWriter, r *http.Request) {
