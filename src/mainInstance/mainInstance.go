@@ -26,6 +26,7 @@ var _KVS *kvsAccess.KeyValStore
 var _my_node structs.NodeInfo
 var _view [][]structs.NodeInfo
 var _K int
+var _causal_Payload []int
 
 func Start() {
 	// create router instance
@@ -50,7 +51,12 @@ func Start() {
 
 	router.HandleFunc("/viewchange", addNode).Methods("PUT")
 
+
 	router.HandleFunc("/heartbeat", HBresponse).Methods("GET")
+
+	router.HandleFunc("/networkMend", handleNetworkMend).Methods("PUT")
+	router.HandleFunc("/kvs/get_number_of_keys", numKeys).Methods("GET")
+
 
 	// listen on port 8080
 	if err := http.ListenAndServe(":8080", router); err != nil {
@@ -75,7 +81,7 @@ func viewToStruct(view string) [][]structs.NodeInfo {
 	var View = make([][]structs.NodeInfo, int(math.Ceil(float64(len(ips))/float64(_K))))
 	part_Id := 0
 	for i := 0; i < len(ips); i++ {
-		temp := structs.NodeInfo{ips[i], ports[i], part_Id}
+		temp := structs.NodeInfo{ips[i], ports[i], part_Id, true}
 		if my_Ip == ips[i] {
 			_my_node = temp
 		}
@@ -88,10 +94,11 @@ func viewToStruct(view string) [][]structs.NodeInfo {
 }
 
 // converts ip:port string in structs.IpPort
+// We don't really need this anymore.
 func ipToStruct(ipPort string) structs.NodeInfo {
 	ip := _ip.FindString(ipPort)
 	port := _port.FindString(ipPort)
-	return structs.NodeInfo{ip, port, -1}
+	return structs.NodeInfo{ip, port, -1, true}
 }
 
 // checks validity of key against constraints
@@ -113,6 +120,17 @@ func findPartition(ip string) (int, int) {
 		}
 	}
 	return -1, -1
+}
+
+// Finds first living node in partition
+func findLiving(ind int) structs.NodeInfo {
+	var Head structs.NodeInfo
+	for _, Head := range _view[ind] {
+		if (Head.Alive == true) {
+			break
+		}
+	}
+	return Head
 }
 
 // removes an element from _view
@@ -196,6 +214,7 @@ func sendUpdate(update structs.ViewUpdateForm) {
 			form.Add("Ip", node.Ip)
 			form.Add("Port", node.Port)
 			form.Add("Id", string(node.Id))
+			form.Add("Alive", strconv.FormatBool(node.Alive))
 		}
 	}
 	formJSON := form.Encode()
@@ -213,11 +232,14 @@ func addNode(w http.ResponseWriter, r *http.Request) {
 	Ip := r.PostForm["Ip"]
 	Port := r.PostForm["Port"]
 	Id := r.PostForm["Id"]
+	Alive := r.PostForm["Alive"]
+	_K,_ := strconv.Atoi(r.PostForm["K"][0])
 
 	_view = make([][]structs.NodeInfo, int(math.Ceil(float64(len(Ip))/float64(_K))))
 	for i, P := range Ip {
 		id, _ := strconv.Atoi(Id[i])
-		temp := structs.NodeInfo{P, Port[i], id}
+		live, _ := strconv.ParseBool(Alive[i])
+		temp := structs.NodeInfo{P, Port[i], id, live}
 		if (my_Ip[0] == P) {_my_node = temp}
 		_view[id] = append(_view[id], temp)
 	}
@@ -251,11 +273,11 @@ func partitionHandler(w http.ResponseWriter, r *http.Request) {
 		// update view
 		for i, part := range _view {
 			if (len(part) < _K) {
-				part = append(part, structs.NodeInfo{postForm.Ip, postForm.Port, i})
+				part = append(part, structs.NodeInfo{postForm.Ip, postForm.Port, i, true})
 				break
 			}
 			if (i+1 == len(_view)) {
-				new_part := []structs.NodeInfo{structs.NodeInfo{postForm.Ip, postForm.Port, i+1}}
+				new_part := []structs.NodeInfo{structs.NodeInfo{postForm.Ip, postForm.Port, i+1, true}}
 				_view = append(_view, new_part)
 				sendRepartition(w)
 			}
@@ -275,8 +297,9 @@ func partitionHandler(w http.ResponseWriter, r *http.Request) {
 func sendRepartition(w http.ResponseWriter) {
 	requestMap := partition.Repartition(_my_node.Id, _view, _KVS)
 	// Only send requests if the first alive node in partition
-	//
-		requestList := httpLogic.CreatePartitionRequests(requestMap)
+	Head := findLiving(_my_node.Id)
+	if _my_node == Head {
+		requestList := httpLogic.CreatePartitionRequests(_view, requestMap)
 		// send requests to nodes for repartitioned keys
 		for _, req := range requestList {
 			client := &http.Client{
@@ -285,7 +308,7 @@ func sendRepartition(w http.ResponseWriter) {
 			_, err := client.Do(req)
 			errPanic(err)
 		}
-	//
+	}
 	// respond with status
 	respBody := structs.PartitionResp{"success"}
 	bodyBytes, _ := json.Marshal(respBody)
@@ -359,41 +382,8 @@ func newSet(w http.ResponseWriter, r *http.Request) {
 		w.Write(jsonResponse)
 		return
 	}
-	// if key does not belong to node
-	// URL logic
-	index := partition.KeyBelongsTo(key, _view)
-	ipPort := _view[index][0]
-	URL := "http://" + ipPort.Ip + ":" + ipPort.Port + r.URL.Path
-	// Request Body Creation
-	form := url.Values{}
-	form.Add("key", key)
-	form.Add("value", value)
-	formJSON := form.Encode()
-	// Request Creation
-	req, err := http.NewRequest(r.Method, URL, strings.NewReader(formJSON))
-	req.Header.Add("Content-Type", "application/x-www-form-urlencoded")
-	// Request sending logic
-	client := &http.Client{
-		Timeout: time.Second,
-	}
-	resp, err := client.Do(req)
-	// MainInstance unavailable logic
-	if err != nil {
-		body := structs.ERROR{"error", "service is not available"}
-		jsonBody, _ := json.Marshal(body)
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(404)
-		w.Write(jsonBody)
-		return
-	}
-	// Response handling logic
-	defer resp.Body.Close()
-	bodyBytes, err2 := ioutil.ReadAll(resp.Body)
-	errPanic(err2)
-	// Response creation logic
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(resp.StatusCode)
-	w.Write(bodyBytes)
+	// Not Mine
+	genericNotMineResponse(w, r, key, value, r.URL.Path)
 }
 
 // New GET Handler
@@ -414,7 +404,6 @@ func newGet(w http.ResponseWriter, r *http.Request) {
 	}
 	// if key belongs to node
 	if partition.KeyBelongs(key[0], _my_node.Id, _view) {
-		get := structs.GET{"blah", "blah", _my_node.Ip + ":" + _my_node.Port}
 		if !keyValid(key[0]) {
 			w.WriteHeader(401)
 			getError := structs.ERROR{"key is empty", "keyError"}
@@ -426,9 +415,8 @@ func newGet(w http.ResponseWriter, r *http.Request) {
 			getError := structs.ERROR{"error", "key does not exist"}
 			jsonResponse, err = json.Marshal(getError)
 		} else {
+			get := structs.GET{"success", resp, _my_node.Ip + ":" + _my_node.Port}
 			w.WriteHeader(200)
-			get.Message = "success"
-			get.Value = resp
 			jsonResponse, err = json.Marshal(get)
 		}
 		// response logic
@@ -436,40 +424,8 @@ func newGet(w http.ResponseWriter, r *http.Request) {
 		w.Write(jsonResponse)
 		return
 	}
-	// if key does not belong to node
-	// URL logic
-	index := partition.KeyBelongsTo(key[0], _view)
-	ipPort := _view[index][0]
-	URL := "http://" + ipPort.Ip + ":" + ipPort.Port + r.URL.RequestURI()
-	// Request Body Creation
-	form := url.Values{}
-	form.Add("key", key[0])
-	formJSON := form.Encode()
-	// Request Creation
-	req, err := http.NewRequest(r.Method, URL, strings.NewReader(formJSON))
-	req.Header.Add("Content-Type", "application/x-www-form-urlencoded")
-	// Request sending logic
-	client := &http.Client{
-		Timeout: time.Second,
-	}
-	resp, err := client.Do(req)
-	// MainInstance unavailable logic
-	if err != nil {
-		body := structs.ERROR{"error", "service is not available"}
-		jsonBody, _ := json.Marshal(body)
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(404)
-		w.Write(jsonBody)
-		return
-	}
-	// Response handling logic
-	defer resp.Body.Close()
-	jsonResponse, err = ioutil.ReadAll(resp.Body)
-	errPanic(err)
-	// Response logic
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(resp.StatusCode)
-	w.Write(jsonResponse)
+	// Not Mine
+	genericNotMineResponse(w, r, key[0], "", r.URL.RequestURI())
 }
 
 // New DELETE Handler
@@ -513,15 +469,22 @@ func newDel(w http.ResponseWriter, r *http.Request) {
 		w.Write(jsonResponse)
 		return
 	}
+	// Not Mine
+	genericNotMineResponse(w, r, key[0], "", r.URL.RequestURI())
+}
+
+func genericNotMineResponse(w http.ResponseWriter, r *http.Request, key string, value string, Url string) {
 	// if key does not belong to node
 	// URL logic
-	index := partition.KeyBelongsTo(key[0], _view)
-	ipPort := _view[index][0]
-	URL := "http://" + ipPort.Ip + ":" + ipPort.Port + r.URL.RequestURI()
-	// log.Print("url: "+URL)
+	index := partition.KeyBelongsTo(key, _view)
+	ipPort := findLiving(index)
+	URL := "http://" + ipPort.Ip + ":" + ipPort.Port + Url
 	// Request Body Creation
 	form := url.Values{}
-	form.Add("key", key[0])
+	form.Add("key", key)
+	if value != "" {
+		form.Add("value", value)
+	}
 	formJSON := form.Encode()
 	// Request Creation
 	req, err := http.NewRequest(r.Method, URL, strings.NewReader(formJSON))
@@ -542,10 +505,64 @@ func newDel(w http.ResponseWriter, r *http.Request) {
 	}
 	// Response handling logic
 	defer resp.Body.Close()
-	jsonResponse, err = ioutil.ReadAll(resp.Body)
+	jsonResponse, err := ioutil.ReadAll(resp.Body)
 	errPanic(err)
 	// Response logic
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(resp.StatusCode)
 	w.Write(jsonResponse)
+}
+
+// Sends Key Value Store to newly reconnected node in partition
+// Also sends Causal Payload to check if KVS is up to date
+func sendNetworkMend (Node structs.NodeInfo) {
+    Ip := Node.Ip
+	Port := Node.Port
+	URL := "http://" + Ip + ":" + Port + "/networkMend"
+	form := url.Values{}
+	for key, val := range _KVS {
+		form.Add("Key", key)
+		form.Add("Val", val)
+	}
+    var payload bytes.Buffer
+    for _, val := range _causal_Payload {
+
+        form.Add("Payload", strval)
+    }
+	formJSON := form.Encode()
+	req, _ := http.NewRequest(http.MethodPut, URL, strings.NewReader(formJSON))
+	req.Header.Add("Content-Type", "application/x-www-form-urlencoded")
+	client := &http.Client{}
+	_, err := client.Do(req)
+	errPanic(err)
+}
+
+// Retrieves new KVS from other node in partition
+// Checks the Causal Payload to see if it is newer than current one
+func handleNetworkMend (w http.ResponseWriter, r *http.Request) {
+    r.ParseForm()
+    Payload := r.PostForm["Payload"]
+    newer := true
+    var newPayload []int
+    for ind, my_num := range _causal_Payload {
+        _, new_num := strconv.Atoi(Payload[ind])
+        if my_num > new_num {
+            newer = false
+            break
+        }
+        newPayload[ind] = new_num
+    }
+    if newer {
+        _KVS = NewKVS()
+		keys := r.PostForm["Key"]
+		vals := r.PostForm["Val"]
+        for i, key := range keys {
+            _KVS.SetValue(key, vals[i])
+        }
+        _causal_Payload = newPayload
+    }
+    respBody := structs.PartitionResp{"success"}
+    bodyBytes, _ := json.Marshal(respBody)
+    w.WriteHeader(200)
+    w.Write(bodyBytes)
 }

@@ -41,22 +41,26 @@ func _hash(key string, view [][]structs.NodeInfo) int {
 
 // main repartitioning Logic
 // Generates map from IpPort to kvs.
-func Repartition(index int, view [][]structs.NodeInfo, kvs *kvsAccess.KeyValStore) map[string]*kvsAccess.KeyValStore {
-	// _ipPort := view[index].Ip+":"+view[index].Port
+func Repartition(index int, view [][]structs.NodeInfo, kvs *kvsAccess.KeyValStore) map[int]*kvsAccess.KeyValStore {
 	// requestMap initialization
-	// requestMap contains a mapping from all the keys to their new ip:port
-	requestMap := make(map[string]*kvsAccess.KeyValStore)
+	// requestMap contains a mapping of keys to their correct partition #
+	requestMap := make(map[int]*kvsAccess.KeyValStore)
     for i, part := range view {
         if (i != index && len(part) != 0) {
-			requestMap[part[0].Ip+":"+part[0].Port] = kvsAccess.NewKVS()
+			requestMap[i] = kvsAccess.NewKVS()
 		}
+		/*for _, Head := range part {
+			if Head.Alive != false {
+				requestMap[Head.Ip+":"+Head.Port] = kvsAccess.NewKVS()
+				break
+			}
+		}*/
 	}
 	for k, v := range kvs.Store {
 		viewIndex := _hash(k, view)
 		if viewIndex != index {
 			kvs.DelValue(k)
-			node := view[viewIndex][0]
-			requestMap[node.Ip+":"+node.Port].SetValue(k, v)
+			requestMap[viewIndex].SetValue(k, v)
 		}
 	}
 	return requestMap

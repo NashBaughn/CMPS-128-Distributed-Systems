@@ -98,22 +98,26 @@ func NotifyNodes(self structs.NodeInfo, viewForm structs.ViewUpdateForm, view []
 
 // return http.Request array
 // for sending all repartitioned keys to their corresponding nodes
-func CreatePartitionRequests(requestMap map[string]*kvsAccess.KeyValStore) []*http.Request {
+func CreatePartitionRequests(view [][]structs.NodeInfo,
+	requestMap map[int]*kvsAccess.KeyValStore) []*http.Request {
+		
 	var requestStore []*http.Request
-	for k, v := range requestMap {
+	for ind, v := range requestMap {
 		form := url.Values{}
 		for k1, v1 := range v.Store {
 			form.Add("key", k1)
 			form.Add("val", v1)
 		}
 		formJSON := form.Encode()
-		url := "http://" + k + "/repartition"
-		req, err := http.NewRequest(http.MethodPut, url, strings.NewReader(formJSON))
-		if err != nil {
-			log.Panic(err)
+		for _, node := range view[ind] {
+			url := "http://" + node.Ip + ":" + node.Port + "/repartition"
+			req, err := http.NewRequest(http.MethodPut, url, strings.NewReader(formJSON))
+			if err != nil {
+				log.Panic(err)
+			}
+			req.Header.Add("Content-Type", "application/x-www-form-urlencoded")
+			requestStore = append(requestStore, req)
 		}
-		req.Header.Add("Content-Type", "application/x-www-form-urlencoded")
-		requestStore = append(requestStore, req)
 	}
 	return requestStore
 }
