@@ -388,8 +388,7 @@ func RepartitionHandler(w http.ResponseWriter, r *http.Request) {
 func NewSet(w http.ResponseWriter, r *http.Request) {
 	// log.Print("PUT request received")
 	// var initialization
-	part, _ := findPartition(_my_node.Ip)
-	put := structs.NewPUTResp{"success", part, _causal_Payload, time.Now()}
+	put := structs.NewPUTResp{"success", _my_node.Id, _causal_Payload, time.Now()}
 	putForm := httpLogic.PutForm(r)
 	log.Print("key: "+putForm.Key)
 	log.Print("value: "+putForm.Value)

@@ -22,13 +22,13 @@ func main() {
   router.HandleFunc("/kvs", mainInstance.NewDel).Methods("DELETE")
   router.HandleFunc("/kvs/view_update", mainInstance.SendViewUpdate).Methods("PUT")
   router.HandleFunc("/kvs/get_number_of_keys", mainInstance.NumKeys).Methods("GET")
+  router.HandleFunc("/kvs/get_all_partition_ids", mainInstance.GetAllPartitionIds).Methods("GET")
 
   router.HandleFunc("/repartition", mainInstance.RepartitionHandler).Methods("PUT")
   router.HandleFunc("/partition", mainInstance.PartitionHandler).Methods("PUT")
   router.HandleFunc("/viewchange", mainInstance.AddNode).Methods("PUT")
   router.HandleFunc("/networkMend", networkMend.HandleNetworkMend).Methods("PUT")
   router.HandleFunc("/heartbeat", heartMonitor.HBresponse).Methods("GET")
-  router.HandleFunc("/kvs/get_all_partition_ids", mainInstance.GetAllPartitionIds).Methods("GET")
 
 
   // listen on port 8080
