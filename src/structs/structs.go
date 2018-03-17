@@ -60,7 +60,7 @@ type PartitionResp struct {
 // author: Alec
 // scenario: node receives a request from a client to add a node
 // purpose: response body template for the node addition request
-type ViewUpdateAddResp struct {
+type AddNodeResp struct {
 	Message string `json:"msg"`
 	Partition_Id int `json:"partition_id"`
 	Number_Of_Partitions int `json:"number_of_partitions"`
@@ -69,7 +69,7 @@ type ViewUpdateAddResp struct {
 // author: Alec
 // scenario: node receives a request from a client to remove a node
 // purpose: response body template for the node removal request
-type ViewUpdateRemoveResp struct {
+type RemoveNodeResp struct {
 	Message string `json:"msg"`
 	Number_Of_Partitions int `json:"number_of_partitions"`
 }

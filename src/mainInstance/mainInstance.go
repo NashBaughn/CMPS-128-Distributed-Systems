@@ -206,28 +206,6 @@ func HBresponse(w http.ResponseWriter, r *http.Request) {
     w.Write(jsonResponse)
 }
 
-// PUT Handler for sending view updates
-func SendViewUpdate(w http.ResponseWriter, r *http.Request) {
-	// parse request and get relevant info (key, value, view_update, type, ip_port)
-	postForm := httpLogic.ViewUpdateForm(r)
-	// notify all nodes
-	requestList := httpLogic.NotifyNodes(_my_node, postForm, _view)
-	for _, req := range requestList {
-		client := &http.Client{Timeout: time.Second}
-		// req.ParseForm()
-		log.Print("req: " + req.URL.String())
-		// log.Print("Node being deleted: "+req.PostForm["ip_port"][0])
-		_, err := client.Do(req)
-		ErrPanic(err)
-	}
-	// if adding new node send updated view table
-	if postForm.Type == "add" {
-		sendUpdate(postForm)
-	}
-	// Reuses partition logic
-	PartitionHandler(w, r)
-}
-
 // number of keys Handler
 func NumKeys(w http.ResponseWriter, r *http.Request) {
 	numKeys := structs.NumKeys{_KVS.NumKeys()}
@@ -259,6 +237,102 @@ func GetPartitionId(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(200)
 	w.Header().Set("Content-Type", "application/json")
 	w.Write(respBody)
+}
+
+// PUT Handler for sending view updates
+func SendViewUpdate(w http.ResponseWriter, r *http.Request) {
+	// parse request and get relevant info (key, value, view_update, type, ip_port)
+	postForm := httpLogic.ViewUpdateForm(r)
+	// notify all nodes
+	requestList := httpLogic.NotifyNodes(_my_node, postForm, _view)
+	for _, req := range requestList {
+		client := &http.Client{Timeout: time.Second}
+		// req.ParseForm()
+		log.Print("req: " + req.URL.String())
+		// log.Print("Node being deleted: "+req.PostForm["ip_port"][0])
+		_, err := client.Do(req)
+		ErrPanic(err)
+	}
+	// if adding new node send updated view table
+	if postForm.Type == "add" {
+		sendUpdate(postForm)
+	}
+	// Reuses partition logic
+	PartitionHandler(w, r)
+}
+
+// Internal endpoint for handling View Update
+func PartitionHandler(w http.ResponseWriter, r *http.Request) {
+	// parse request and get relevant info (key, value, view_update, type, ip_port)
+	postForm := httpLogic.ViewUpdateForm(r)
+	w.WriteHeader(200)
+	w.Header().Set("Content-Type", "application/json")
+	if postForm.Type == "add" {
+		// update view
+		var respBody structs.AddNodeResp
+		for i, part := range _view {
+			if (len(part) < _K) {
+				part = append(part, structs.NodeInfo{postForm.Ip, postForm.Port, i, true})
+				break
+			}
+			if (i+1 == len(_view)) {
+				new_part := []structs.NodeInfo{structs.NodeInfo{postForm.Ip, postForm.Port, i+1, true}}
+				_view = append(_view, new_part)
+				sendRepartition()
+			}
+		}
+		// respond with status
+		ind,_ :=findPartition(postForm.Ip)
+		respBody = structs.AddNodeResp{"success",ind, len(_view)}
+		bodyBytes, _ = json.Marshal(respBody)
+		w.Write(bodyBytes)
+	} else {
+		// update view
+		partIndex, nodeIndex := findPartition(postForm.Ip)
+		ErrPanicStr(partIndex != -1, "ip does not exist!: "+postForm.Ip)
+		removeView(partIndex, nodeIndex)
+		if (len(_view[partIndex]) == 0) {
+			sendRepartition()
+		}
+		respBody := structs.RemoveNodeResp{"success", len(_view)}
+		bodyBytes, _ = json.Marshal(respBody)
+		w.Write(bodyBytes)
+	}
+}
+
+// repartition all keys in kvs and sends to new partition
+func sendRepartition() {
+	requestMap := partition.Repartition(_my_node.Id, _view, _KVS)
+	// Only send requests if the first alive node in partition
+	Head := findLiving(_my_node.Id)
+	if _my_node == Head {
+		requestList := httpLogic.CreatePartitionRequests(_view, requestMap)
+		// send requests to nodes for repartitioned keys
+		for _, req := range requestList {
+			client := &http.Client{
+				Timeout: time.Second,
+			}
+			_, err := client.Do(req)
+			ErrPanic(err)
+		}
+	}
+}
+
+// Internal endpoint for handling repartition request and kvs manipulations
+func RepartitionHandler(w http.ResponseWriter, r *http.Request) {
+	log.Print("repartitionHandler")
+	partForm := httpLogic.PartitionForm(r)
+	// kvs storage
+	for key, val := range partForm {
+		log.Print("key: " + key + " value: " + val + " STORED!")
+		_KVS.SetValue(key, val)
+	}
+	// respond with status
+	respBody := structs.PartitionResp{"success"}
+	bodyBytes, _ := json.Marshal(respBody)
+	w.WriteHeader(200)
+	w.Header().Set("Content-Type", "application/json")
+	w.Write(bodyBytes)
 }
 
 // Sends all View Info to new node
@@ -323,75 +397,6 @@ func customPrint() {
 	}
 	log.Print("- - - - - - - - - - - - END - - - - - - - - - - -")
 
-}
-
-// Internal endpoint for handling View Update
-func PartitionHandler(w http.ResponseWriter, r *http.Request) {
-	// parse request and get relevant info (key, value, view_update, type, ip_port)
-	postForm := httpLogic.ViewUpdateForm(r)
-	if postForm.Type == "add" {
-		// update view
-		for i, part := range _view {
-			if (len(part) < _K) {
-				part = append(part, structs.NodeInfo{postForm.Ip, postForm.Port, i, true})
-				break
-			}
-			if (i+1 == len(_view)) {
-				new_part := []structs.NodeInfo{structs.NodeInfo{postForm.Ip, postForm.Port, i+1, true}}
-				_view = append(_view, new_part)
-				sendRepartition(w)
-			}
-		}
-	} else {
-		// update view
-		partIndex, nodeIndex := findPartition(postForm.Ip)
-		ErrPanicStr(partIndex != -1, "ip does not exist!: "+postForm.Ip)
-		removeView(partIndex, nodeIndex)
-		if (len(_view[partIndex]) == 0) {
-			sendRepartition(w)
-		}
-	}
-}
-
-// repartition all keys in kvs and sends to new partition
-func sendRepartition(w http.ResponseWriter) {
-	requestMap := partition.Repartition(_my_node.Id, _view, _KVS)
-	// Only send requests if the first alive node in partition
-	Head := findLiving(_my_node.Id)
-	if _my_node == Head {
-		requestList := httpLogic.CreatePartitionRequests(_view, requestMap)
-		// send requests to nodes for repartitioned keys
-		for _, req := range requestList {
-			client := &http.Client{
-				Timeout: time.Second,
-			}
-			_, err := client.Do(req)
-			ErrPanic(err)
-		}
-	}
-	// respond with status
-	respBody := structs.PartitionResp{"success"}
-	bodyBytes, _ := json.Marshal(respBody)
-	w.WriteHeader(200)
-	w.Header().Set("Content-Type", "application/json")
-	w.Write(bodyBytes)
-}
-
-// Internal endpoint for handling repartition request and kvs manipulations
-func RepartitionHandler(w http.ResponseWriter, r *http.Request) {
-	log.Print("repartitionHandler")
-	partForm := httpLogic.PartitionForm(r)
-	// kvs storage
-	for key, val := range partForm {
-		log.Print("key: " + key + " value: " + val + " STORED!")
-		_KVS.SetValue(key, val)
-	}
-	// respond with status
-	respBody := structs.PartitionResp{"success"}
-	bodyBytes, _ := json.Marshal(respBody)
-	w.WriteHeader(200)
-	w.Header().Set("Content-Type", "application/json")
-	w.Write(bodyBytes)
 }
 
 // new PUT handler for kvs manipulations
