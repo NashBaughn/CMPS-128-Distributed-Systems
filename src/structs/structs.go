@@ -127,7 +127,7 @@ type PUT struct {
 // scenario: node receives a PUT request and needs to send a response back
 // purpose: response body template for PUT request
 // TODO: Do we want Timestamp to be an int?
-type newPUTResp struct {
+type NewPUTResp struct {
 	Message string `json:"msg"`
 	Partition_Id int `json:"partition_id"`
 	Causal_Payload []int `json:"causal_payload"`

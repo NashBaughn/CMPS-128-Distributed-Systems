@@ -26,12 +26,14 @@ var _view [][]structs.NodeInfo
 var _K int
 var _causal_Payload []int
 
+var testing = false
+
 func Start() {
 	//init instance of our global kvs
 	_KVS = kvsAccess.NewKVS()
 
 	// fill global vars with ENV vars
-	_view = viewToStruct("10.0.0.1:8080, 10.0.0.1:8081")
+	_view = viewToStruct(os.Getenv("VIEW"))
 	// _view = viewToStruct(os.Getenv("VIEW")) // regex logic in partition
 
 }
@@ -49,15 +51,44 @@ var _n = int((^uint(0)) >> 1)
 // update: fixed some bugs and added some dummy data
 // purpose: the code now runs with no compile or run-time errors/warnings
 func viewToStruct(view string) [][]structs.NodeInfo {
-	my_Ip := _ip.FindString(os.Getenv("10:.0.0.1:8080"))
-	_K, _ := strconv.Atoi("3")
-	// my_Ip := _ip.FindString(os.Getenv("ip_port"))
-	// _K, _ := strconv.Atoi(os.Getenv("K"))
-	ips := _ip.FindAllString(view, _n)
-	log.Print("ips: "+strings.Join(ips, ""))
-	log.Print("len(ips): "+strconv.Itoa(len(ips)))
-	log.Print("_K: "+strconv.Itoa(_K))
-	ports := _port.FindAllString(view, _n)
+
+	/* Data used in function */
+
+	var my_Ip string
+	var _K int
+	var ips []string
+	var ports []string
+
+	/* Test Data */
+
+	if(testing) {
+		my_Ip = _ip.FindString(os.Getenv("10:.0.0.1:8080"))
+		_K, _ = strconv.Atoi("3")
+		ips = _port.FindAllString("10.0.0.1:8080, 10.0.0.1:8080, 10.0.0.1:8080, 10.0.0.1:8080", _n)
+		ports = _port.FindAllString("10.0.0.1:8080, 10.0.0.1:8080, 10.0.0.1:8080, 10.0.0.1:8080", _n)
+	}
+
+	/* Real Data */
+
+	if(!testing) {
+		my_Ip = _ip.FindString(os.Getenv("ip_port"))
+		_K, _ = strconv.Atoi(os.Getenv("K"))
+		ips = _ip.FindAllString(view, _n)
+		ports = _port.FindAllString(view, _n)
+	}
+
+	/* Print sanity logs */
+
+	// log.Print("ips: "+strings.Join(ips, ""))
+	// log.Print("len(ips): "+strconv.Itoa(len(ips)))
+	// log.Print("_K: "+strconv.Itoa(_K))
+	// log.Print("float64(len(ip)): "+strconv.FormatFloat(float64(len(ips)), 'E', -1, 64))
+	// log.Print("float64(_K): "+strconv.FormatFloat(float64(_K), 'E', -1, 64))
+	// log.Print("float(len(ips)) / float64(_K): "+strconv.FormatFloat(float64(len(ips))/float64(_K), 'E', -1, 64))
+	// log.Print(strconv.Itoa(int(math.Ceil(float64(len(ips))/float64(_K)))))
+
+	/* main logic */
+
 	var View = make([][]structs.NodeInfo, int(math.Ceil(float64(len(ips))/float64(_K))))
 	part_Id := 0
 	for i, ip := range(ips) {
@@ -332,16 +363,19 @@ func RepartitionHandler(w http.ResponseWriter, r *http.Request) {
 
 // new PUT handler for kvs manipulations
 func NewSet(w http.ResponseWriter, r *http.Request) {
+	log.Print("PUT request received")
 	// var initialization
-	put := structs.PUT{0, "yolo", _my_node.Ip + ":" + _my_node.Port}
+	part, _ := findPartition(_my_node.Ip)
+	log.Print(time.Now().String())
+	put := structs.NewPUTResp{"success", part, _causal_Payload, 23}
 	postForm := httpLogic.PutForm(r)
 	key := postForm.Key
 	value := postForm.Key
 	// check if key exists
 	if len(key) == 0 {
 		put.Message = "error"
-		put.Replaced = 0
-		put.Owner = "undetermined"
+		// put.Replaced = 0
+		// put.Owner = "undetermined"
 		w.WriteHeader(400)
 		jsonResponse, err := json.Marshal(put)
 		ErrPanic(err)
@@ -355,8 +389,8 @@ func NewSet(w http.ResponseWriter, r *http.Request) {
 		if !keyValid(key) {
 			// repsonse preparation
 			put.Message = "error"
-			put.Replaced = 0
-			put.Owner = "undetermined"
+			// put.Replaced = 0
+			// put.Owner = "undetermined"
 			w.WriteHeader(401)
 		} else {
 			// do relevant kvs ops
@@ -366,10 +400,10 @@ func NewSet(w http.ResponseWriter, r *http.Request) {
 			put.Message = "success"
 			if resp == "" {
 				w.WriteHeader(201)
-				put.Replaced = 0
+				// put.Replaced = 0
 			} else {
 				w.WriteHeader(200)
-				put.Replaced = 1
+				// put.Replaced = 1
 			}
 		}
 		// respond
@@ -470,6 +504,9 @@ func NewDel(w http.ResponseWriter, r *http.Request) {
 }
 
 func genericNotMineResponse(w http.ResponseWriter, r *http.Request, key string, value string, Url string) {
+	log.Print("---------------------------------")
+	log.Print("genericNotMineResponse")
+	log.Print("---------------------------------")
 	// if key does not belong to node
 	// URL logic
 	index := partition.KeyBelongsTo(key, _view)
