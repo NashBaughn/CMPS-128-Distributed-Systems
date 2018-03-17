@@ -251,6 +251,16 @@ func GetAllPartitionIds(w http.ResponseWriter, r *http.Request) {
 	w.Write(respBody)
 }
 
+func GetPartitionId(w http.ResponseWriter, r *http.Request) {
+	r.ParseForm()
+	form := structs.GETPartitionIdResp{"success", partition.KeyBelongsTo(r.Form["key"][0], _view)}
+	respBody, err := json.Marshal(form)
+	ErrPanic(err)
+	w.WriteHeader(200)
+	w.Header().Set("Content-Type", "application/json")
+	w.Write(respBody)
+}
+
 // Sends all View Info to new node
 func sendUpdate(update structs.ViewUpdateForm) {
 	Ip := update.Ip
@@ -443,6 +453,7 @@ func NewGet(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	// parse request for relevant data (key, get_number_of_keys)
 	key, keyExists := r.URL.Query()["key"]
+	// log.Print("key: "+key[0])
 	var jsonResponse []byte
 	var err error
 	// check to make sure key exists
@@ -467,7 +478,7 @@ func NewGet(w http.ResponseWriter, r *http.Request) {
 			getError := structs.ERROR{"error", "key does not exist"}
 			jsonResponse, err = json.Marshal(getError)
 		} else {
-			get := structs.GET{"success", resp, _my_node.Ip + ":" + _my_node.Port}
+			get := structs.NewGETResp{"success", resp, _my_node.Id, _causal_Payload, time.Now()}
 			w.WriteHeader(200)
 			jsonResponse, err = json.Marshal(get)
 		}
@@ -531,10 +542,12 @@ func genericNotMineResponse(w http.ResponseWriter, r *http.Request) {
 	log.Print("---------------------------------")
 	// PostForm logic
 	r.ParseForm()
-	form := r.PostForm
+	form := r.Form
+	key := form["key"][0]
+	log.Print("key: "+key)
 	// URL logic
 	URI := r.URL.RequestURI()
-	index := partition.KeyBelongsTo(form["key"][0], _view)
+	index := partition.KeyBelongsTo(key, _view)
 	log.Print("index: "+strconv.Itoa(index))
 	ipPort := findLiving(index)
 	log.Print("ipPort: "+ipPort.Ip+":"+ipPort.Port)
