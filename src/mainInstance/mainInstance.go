@@ -422,7 +422,7 @@ func NewSet(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// Not Mine
-	genericNotMineResponse(w, r, putForm.Key, putForm.Value, r.URL.Path)
+	genericNotMineResponse(w, r)
 }
 
 // New GET Handler
@@ -464,7 +464,7 @@ func NewGet(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// Not Mine
-	genericNotMineResponse(w, r, key[0], "", r.URL.RequestURI())
+	genericNotMineResponse(w, r)
 }
 
 // New DELETE Handler
@@ -509,32 +509,25 @@ func NewDel(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// Not Mine
-	genericNotMineResponse(w, r, key[0], "", r.URL.RequestURI())
+	genericNotMineResponse(w, r)
 }
 
-func genericNotMineResponse(w http.ResponseWriter, r *http.Request, key string, value string, Url string) {
+func genericNotMineResponse(w http.ResponseWriter, r *http.Request) {
 	log.Print("---------------------------------")
 	log.Print("genericNotMineResponse")
 	log.Print("---------------------------------")
-	reqBody, _ := ioutil.ReadAll(r.Body)
-	log.Print("reqBody: "+string(reqBody))
-	log.Print(r.Method)
-	log.Print("key: "+key)
-	log.Print("value: "+value)
-	log.Print("request URL: "+Url)
+	// PostForm logic
+	r.ParseForm()
+	form := r.PostForm
 	// URL logic
-	index := partition.KeyBelongsTo(key, _view)
+	URI := r.URL.RequestURI()
+	index := partition.KeyBelongsTo(form["key"][0], _view)
 	log.Print("index: "+strconv.Itoa(index))
 	ipPort := findLiving(index)
 	log.Print("ipPort: "+ipPort.Ip+":"+ipPort.Port)
-	URL := "http://" + ipPort.Ip + ":" + ipPort.Port + Url
+	URL := "http://" + ipPort.Ip + ":" + ipPort.Port + URI
 	log.Print(URL)
 	// Request Body Creation
-	form := url.Values{}
-	form.Add("key", key)
-	if value != "" {
-		form.Add("value", value)
-	}
 	formJSON := form.Encode()
 	// Request Creation
 	req, err := http.NewRequest(r.Method, URL, strings.NewReader(formJSON))
