@@ -106,7 +106,7 @@ type GETPartitionMembersResp struct {
 // scenario: node receives a GET request and needs to send a response back
 // purpose: response body template for GET request
 // TODO: Do we want Timestamp to be an int?
-type newGETResp struct {
+type NewGETResp struct {
 	Message string `json:"msg"`
 	Value   string `json:"value"`
 	Partition_Id int `json:"partition_id"`
