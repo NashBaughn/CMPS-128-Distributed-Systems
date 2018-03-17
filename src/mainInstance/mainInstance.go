@@ -252,8 +252,22 @@ func GetAllPartitionIds(w http.ResponseWriter, r *http.Request) {
 }
 
 func GetPartitionId(w http.ResponseWriter, r *http.Request) {
+	form := structs.GETPartitionIdResp{"success", _my_node.Id}
+	respBody, err := json.Marshal(form)
+	ErrPanic(err)
+	w.WriteHeader(200)
+	w.Header().Set("Content-Type", "application/json")
+	w.Write(respBody)
+}
+
+func GetPartitionMembers(w http.ResponseWriter, r *http.Request) {
 	r.ParseForm()
-	form := structs.GETPartitionIdResp{"success", partition.KeyBelongsTo(r.Form["key"][0], _view)}
+	var partition_members []string
+	id, _ := strconv.Atoi(r.Form["partition_id"][0])
+	for _, node := range(_view[id]) {
+		partition_members = append(partition_members, node.Ip+":"+node.Port)
+	}
+	form := structs.GETPartitionMembersResp{"success", partition_members}
 	respBody, err := json.Marshal(form)
 	ErrPanic(err)
 	w.WriteHeader(200)

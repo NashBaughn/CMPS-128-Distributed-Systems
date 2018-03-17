@@ -24,6 +24,7 @@ func main() {
   router.HandleFunc("/kvs/get_number_of_keys", mainInstance.NumKeys).Methods("GET")
   router.HandleFunc("/kvs/get_all_partition_ids", mainInstance.GetAllPartitionIds).Methods("GET")
   router.HandleFunc("/kvs/get_partition_id", mainInstance.GetPartitionId).Methods("GET")
+  router.HandleFunc("/kvs/get_partition_members", mainInstance.GetPartitionMembers).Methods("GET")
 
   router.HandleFunc("/repartition", mainInstance.RepartitionHandler).Methods("PUT")
   router.HandleFunc("/partition", mainInstance.PartitionHandler).Methods("PUT")

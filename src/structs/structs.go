@@ -99,7 +99,7 @@ type GETAllPartitionIdsResp struct {
 // purpose: response body template for the partition_id request
 type GETPartitionMembersResp struct {
 	Message string `json:"msg"`
-	Partition_Members []int `json:"partition_members"`
+	Partition_Members []string `json:"partition_members"`
 }
 
 type GET struct {
