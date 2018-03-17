@@ -8,18 +8,13 @@ import (
     "mainInstance"
 )
 
-func NewHeartMonitor() *HeartMonitor {
-    return &HeartMonitor{}
-}
 
-type HeartMonitor struct {
-
-}
-
-func BeginMonitor(view [][]structs.NodeInfo) {
+func BeginMonitor(view *[][]structs.NodeInfo) {
     for {
         time.Sleep(5000 * time.Millisecond)
-        CheckNodes(view)
+        log.Print(curr.Ip)
+        log.Print(*view)
+        CheckNodes(*view)
     }
 }
 
