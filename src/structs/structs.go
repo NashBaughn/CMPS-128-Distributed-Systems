@@ -1,4 +1,7 @@
 package structs
+import (
+	"time"
+)
 
 // File full of data structures
 
@@ -114,7 +117,7 @@ type newGETResp struct {
 	Value   string `json:"value"`
 	Partition_Id int `json:"partition_id"`
 	Causal_Payload []int `json:"causal_payload"`
-	Timestamp int `json:"timestamp"` // do we want this as an int?
+	Timestamp time.Time `json:"timestamp"` // do we want this as an int?
 }
 
 type PUT struct {
@@ -131,7 +134,7 @@ type NewPUTResp struct {
 	Message string `json:"msg"`
 	Partition_Id int `json:"partition_id"`
 	Causal_Payload []int `json:"causal_payload"`
-	Timestamp int `json:"timestamp"` // do we want this as an int?
+	Timestamp time.Time `json:"timestamp"` // do we want this as an int?
 }
 
 type ERROR struct {

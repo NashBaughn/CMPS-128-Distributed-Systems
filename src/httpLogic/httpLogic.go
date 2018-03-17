@@ -6,12 +6,15 @@ import (
 	"net/http"
 	"net/url"
 	"regexp"
+	"strconv"
 	"strings"
 	"structs"
 )
 
 var _ip = regexp.MustCompile(`(\d+\.){3}(\d+)`)
 var _port = regexp.MustCompile(`\d{4}`)
+var _causal_payload = regexp.MustCompile(`\d+`)
+var _n = int((^uint(0)) >> 1)
 
 // parses http.Request in view_update context
 func ViewUpdateForm(r *http.Request) structs.ViewUpdateForm {
@@ -27,12 +30,25 @@ func ViewUpdateForm(r *http.Request) structs.ViewUpdateForm {
 	return viewUpdateForm
 }
 
+func ParseCausalPayload(causal_payload_string string) []int {
+	var causal_payload []int
+	causal_payload_strings := _causal_payload.FindAllString(causal_payload_string, _n)
+	for i, str := range(causal_payload_strings) {
+		log.Print(str)
+		payload, _ := strconv.Atoi(str)
+		causal_payload = append(causal_payload, payload)
+		log.Print(strconv.Itoa(causal_payload[i]))
+	}
+	return causal_payload
+}
+
 // parses http.Request in PUT kvs context
-func PutForm(r *http.Request) structs.PutForm {
+func PutForm(r *http.Request) structs.NewPutForm {
 	r.ParseForm()
 	key := r.FormValue("key")
-	value := r.FormValue("val")
-	return structs.PutForm{key, value}
+	value := r.FormValue("value")
+	causal_payload := r.FormValue("causal_payload")
+	return structs.NewPutForm{key, value, ParseCausalPayload(causal_payload)}
 }
 
 // parses http.Request in repartition context
@@ -100,7 +116,7 @@ func NotifyNodes(self structs.NodeInfo, viewForm structs.ViewUpdateForm, view []
 // for sending all repartitioned keys to their corresponding nodes
 func CreatePartitionRequests(view [][]structs.NodeInfo,
 	requestMap map[int]*kvsAccess.KeyValStore) []*http.Request {
-		
+
 	var requestStore []*http.Request
 	for ind, v := range requestMap {
 		form := url.Values{}

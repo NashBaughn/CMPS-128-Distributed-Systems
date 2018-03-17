@@ -29,12 +29,12 @@ func KeyBelongsTo(key string, view [][]structs.NodeInfo) int {
 func _hash(key string, view [][]structs.NodeInfo) int {
 	hash := fnv.New32a()
 	hash.Write([]byte(key))
-    var partitions []int
-    for i, part := range view {
-        if (len(part) != 0) {
-            partitions = append(partitions, i)
-        }
+  var partitions []int
+  for i, part := range view {
+    if (len(part) != 0) {
+      partitions = append(partitions, i)
     }
+  }
 	index := int(hash.Sum32()) % len(partitions)
 	return partitions[index]
 }

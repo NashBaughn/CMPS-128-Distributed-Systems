@@ -64,7 +64,7 @@ func viewToStruct(view string) [][]structs.NodeInfo {
 	if(testing) {
 		my_Ip = _ip.FindString(os.Getenv("10:.0.0.1:8080"))
 		_K, _ = strconv.Atoi("3")
-		ips = _port.FindAllString("10.0.0.1:8080, 10.0.0.1:8080, 10.0.0.1:8080, 10.0.0.1:8080", _n)
+		ips = _ip.FindAllString("10.0.0.1:8080, 10.0.0.1:8080, 10.0.0.1:8080, 10.0.0.1:8080", _n)
 		ports = _port.FindAllString("10.0.0.1:8080, 10.0.0.1:8080, 10.0.0.1:8080, 10.0.0.1:8080", _n)
 	}
 
@@ -79,9 +79,10 @@ func viewToStruct(view string) [][]structs.NodeInfo {
 
 	/* Print sanity logs */
 
+	log.Print("my_Ip_Port: "+my_Ip)
 	// log.Print("ips: "+strings.Join(ips, ""))
 	// log.Print("len(ips): "+strconv.Itoa(len(ips)))
-	// log.Print("_K: "+strconv.Itoa(_K))
+	log.Print("_K: "+strconv.Itoa(_K))
 	// log.Print("float64(len(ip)): "+strconv.FormatFloat(float64(len(ips)), 'E', -1, 64))
 	// log.Print("float64(_K): "+strconv.FormatFloat(float64(_K), 'E', -1, 64))
 	// log.Print("float(len(ips)) / float64(_K): "+strconv.FormatFloat(float64(len(ips))/float64(_K), 'E', -1, 64))
@@ -101,6 +102,15 @@ func viewToStruct(view string) [][]structs.NodeInfo {
 			part_Id++
 		}
 	}
+	log.Print("------------------------------------")
+	log.Print("num of partitions: "+strconv.Itoa(len(View)))
+	for i, part := range(View) {
+		log.Print("partition "+strconv.Itoa(i)+":")
+		for k, node := range(part) {
+			log.Print(strconv.Itoa(k)+"th Ip: "+node.Ip+" Port: "+node.Port+" Id: "+strconv.Itoa(node.Id)+" Alive: "+strconv.FormatBool(node.Alive))
+		}
+	}
+	log.Print("------------------------------------")
 	return View
 }
 
@@ -152,7 +162,7 @@ func findPartition(ip string) (int, int) {
 // Finds first living node in partition
 func findLiving(ind int) structs.NodeInfo {
 	var Head structs.NodeInfo
-	for _, Head := range _view[ind] {
+	for _, Head = range _view[ind] {
 		if (Head.Alive == true) {
 			break
 		}
@@ -363,16 +373,15 @@ func RepartitionHandler(w http.ResponseWriter, r *http.Request) {
 
 // new PUT handler for kvs manipulations
 func NewSet(w http.ResponseWriter, r *http.Request) {
-	log.Print("PUT request received")
+	// log.Print("PUT request received")
 	// var initialization
 	part, _ := findPartition(_my_node.Ip)
-	log.Print(time.Now().String())
-	put := structs.NewPUTResp{"success", part, _causal_Payload, 23}
-	postForm := httpLogic.PutForm(r)
-	key := postForm.Key
-	value := postForm.Key
+	put := structs.NewPUTResp{"success", part, _causal_Payload, time.Now()}
+	putForm := httpLogic.PutForm(r)
+	log.Print("key: "+putForm.Key)
+	log.Print("value: "+putForm.Value)
 	// check if key exists
-	if len(key) == 0 {
+	if len(putForm.Key) == 0 {
 		put.Message = "error"
 		// put.Replaced = 0
 		// put.Owner = "undetermined"
@@ -383,10 +392,10 @@ func NewSet(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// key belongs to this node
-	if partition.KeyBelongs(key, _my_node.Id, _view) {
+	if partition.KeyBelongs(putForm.Key, _my_node.Id, _view) {
 		var resp string
 		// check validitiy of key
-		if !keyValid(key) {
+		if !keyValid(putForm.Key) {
 			// repsonse preparation
 			put.Message = "error"
 			// put.Replaced = 0
@@ -394,7 +403,7 @@ func NewSet(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(401)
 		} else {
 			// do relevant kvs ops
-			resp = _KVS.SetValue(key, value)
+			resp = _KVS.SetValue(putForm.Key, putForm.Value)
 			// response preparation
 			w.Header().Set("Content-Type", "application/json")
 			put.Message = "success"
@@ -413,7 +422,7 @@ func NewSet(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// Not Mine
-	genericNotMineResponse(w, r, key, value, r.URL.Path)
+	genericNotMineResponse(w, r, putForm.Key, putForm.Value, r.URL.Path)
 }
 
 // New GET Handler
@@ -507,11 +516,19 @@ func genericNotMineResponse(w http.ResponseWriter, r *http.Request, key string, 
 	log.Print("---------------------------------")
 	log.Print("genericNotMineResponse")
 	log.Print("---------------------------------")
-	// if key does not belong to node
+	reqBody, _ := ioutil.ReadAll(r.Body)
+	log.Print("reqBody: "+string(reqBody))
+	log.Print(r.Method)
+	log.Print("key: "+key)
+	log.Print("value: "+value)
+	log.Print("request URL: "+Url)
 	// URL logic
 	index := partition.KeyBelongsTo(key, _view)
+	log.Print("index: "+strconv.Itoa(index))
 	ipPort := findLiving(index)
+	log.Print("ipPort: "+ipPort.Ip+":"+ipPort.Port)
 	URL := "http://" + ipPort.Ip + ":" + ipPort.Port + Url
+	log.Print(URL)
 	// Request Body Creation
 	form := url.Values{}
 	form.Add("key", key)
