@@ -31,7 +31,8 @@ func Start() {
 	_KVS = kvsAccess.NewKVS()
 
 	// fill global vars with ENV vars
-	_view = viewToStruct(os.Getenv("VIEW")) // regex logic in partition
+	_view = viewToStruct("10.0.0.1:8080, 10.0.0.1:8081")
+	// _view = viewToStruct(os.Getenv("VIEW")) // regex logic in partition
 
 }
 
@@ -44,16 +45,24 @@ var _port = regexp.MustCompile(`\d{4}`)
 var _n = int((^uint(0)) >> 1)
 
 // converts VIEW string into []structs.NodeInfo
+// author: Alec
+// update: fixed some bugs and added some dummy data
+// purpose: the code now runs with no compile or run-time errors/warnings
 func viewToStruct(view string) [][]structs.NodeInfo {
-	my_Ip := _ip.FindString(os.Getenv("ip_port"))
-	_K, _ := strconv.Atoi(os.Getenv("K"))
+	my_Ip := _ip.FindString(os.Getenv("10:.0.0.1:8080"))
+	_K, _ := strconv.Atoi("3")
+	// my_Ip := _ip.FindString(os.Getenv("ip_port"))
+	// _K, _ := strconv.Atoi(os.Getenv("K"))
 	ips := _ip.FindAllString(view, _n)
+	log.Print("ips: "+strings.Join(ips, ""))
+	log.Print("len(ips): "+strconv.Itoa(len(ips)))
+	log.Print("_K: "+strconv.Itoa(_K))
 	ports := _port.FindAllString(view, _n)
 	var View = make([][]structs.NodeInfo, int(math.Ceil(float64(len(ips))/float64(_K))))
 	part_Id := 0
-	for i := 0; i < len(ips); i++ {
-		temp := structs.NodeInfo{ips[i], ports[i], part_Id, true}
-		if my_Ip == ips[i] {
+	for i, ip := range(ips) {
+		temp := structs.NodeInfo{ip, ports[i], part_Id, true}
+		if my_Ip == ip {
 			_my_node = temp
 		}
 		View[part_Id] = append(View[part_Id], temp)
