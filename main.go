@@ -28,6 +28,7 @@ func main() {
   router.HandleFunc("/viewchange", mainInstance.AddNode).Methods("PUT")
   router.HandleFunc("/networkMend", networkMend.HandleNetworkMend).Methods("PUT")
   router.HandleFunc("/heartbeat", heartMonitor.HBresponse).Methods("GET")
+  router.HandleFunc("/kvs/get_all_partition_ids", mainInstance.GetAllPartitionIds).Methods("GET")
 
 
   // listen on port 8080

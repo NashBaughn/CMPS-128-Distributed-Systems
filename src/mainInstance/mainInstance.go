@@ -238,6 +238,19 @@ func NumKeys(w http.ResponseWriter, r *http.Request) {
 	w.Write(respBody)
 }
 
+func GetAllPartitionIds(w http.ResponseWriter, r *http.Request) {
+	var partition_ids []int
+	for i, _ := range(_view) {
+		partition_ids = append(partition_ids, i)
+	}
+	form := structs.GETAllPartitionIdsResp{"success", partition_ids}
+	respBody, err := json.Marshal(form)
+	ErrPanic(err)
+	w.WriteHeader(200)
+	w.Header().Set("Content-Type", "application/json")
+	w.Write(respBody)
+}
+
 // Sends all View Info to new node
 func sendUpdate(update structs.ViewUpdateForm) {
 	Ip := update.Ip
