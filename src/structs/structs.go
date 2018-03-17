@@ -102,12 +102,6 @@ type GETPartitionMembersResp struct {
 	Partition_Members []string `json:"partition_members"`
 }
 
-type GET struct {
-	Message string `json:"msg"`
-	Value   string `json:"value"`
-	Owner   string `json:"owner"`
-}
-
 // author: Alec
 // scenario: node receives a GET request and needs to send a response back
 // purpose: response body template for GET request
@@ -118,12 +112,6 @@ type NewGETResp struct {
 	Partition_Id int `json:"partition_id"`
 	Causal_Payload []int `json:"causal_payload"`
 	Timestamp time.Time `json:"timestamp"` // do we want this as an int?
-}
-
-type PUT struct {
-	Replaced int    `json:"replaced"`
-	Message  string `json:"msg"`
-	Owner    string `json:"owner"`
 }
 
 // author: Alec
