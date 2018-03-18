@@ -11,6 +11,7 @@ import (
 	"partition"
 	"regexp"
 	"structs"
+	"heartMonitor"
 	// "strconv"
 	"io/ioutil"
 	"math"
@@ -34,8 +35,10 @@ func Start() {
 
 	// fill global vars with ENV vars
 	_view = viewToStruct(os.Getenv("VIEW"))
-	// _view = viewToStruct(os.Getenv("VIEW")) // regex logic in partition
 
+	log.Print(_my_node)
+	// start heartMonitor
+	go heartMonitor.Start(_my_node, &_view)
 }
 
 // // // // // // // // // // // // // //
@@ -64,7 +67,7 @@ func viewToStruct(view string) [][]structs.NodeInfo {
 	if(testing) {
 		my_Ip = _ip.FindString(os.Getenv("10:.0.0.1:8080"))
 		_K, _ = strconv.Atoi("3")
-		ips = _ip.FindAllString("10.0.0.1:8080, 10.0.0.1:8080, 10.0.0.1:8080, 10.0.0.1:8080", _n)
+		ips = _ip.FindAllString("10.0.0.1:8080, 10.0.0.2:8080, 10.0.0.3:8080, 10.0.0.4:8080", _n)
 		ports = _port.FindAllString("10.0.0.1:8080, 10.0.0.1:8080, 10.0.0.1:8080, 10.0.0.1:8080", _n)
 	}
 
@@ -89,7 +92,10 @@ func viewToStruct(view string) [][]structs.NodeInfo {
 	// log.Print(strconv.Itoa(int(math.Ceil(float64(len(ips))/float64(_K)))))
 
 	/* main logic */
-
+	log.Print(_K)
+	if (_K == 0) {
+		return nil
+	}
 	var View = make([][]structs.NodeInfo, int(math.Ceil(float64(len(ips))/float64(_K))))
 	part_Id := 0
 	for i, ip := range(ips) {
