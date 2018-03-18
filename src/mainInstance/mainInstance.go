@@ -170,6 +170,17 @@ func findLiving(ind int) structs.NodeInfo {
 	return Head
 }
 
+// Finds all living nodes in partition
+func findAllLiving(ind int) []structs.NodeInfo {
+	var Alive []structs.NodeInfo
+	for _, Head := range _view[ind] {
+		if (Head.Alive == true) {
+			Alive = append(Alive, Head)
+		}
+	}
+	return Alive
+}
+
 // removes an element from _view
 func removeView(i int, j int) {
 	Part := _view[i]
@@ -298,7 +309,7 @@ func PartitionHandler(w http.ResponseWriter, r *http.Request) {
 		// respond with status
 		ind,_ :=findPartition(postForm.Ip)
 		respBody = structs.AddNodeResp{"success",ind, len(_view)}
-		bodyBytes, _ = json.Marshal(respBody)
+		bodyBytes, _ := json.Marshal(respBody)
 		w.Write(bodyBytes)
 	} else {
 		// update view
@@ -309,7 +320,7 @@ func PartitionHandler(w http.ResponseWriter, r *http.Request) {
 			sendRepartition()
 		}
 		respBody := structs.RemoveNodeResp{"success", len(_view)}
-		bodyBytes, _ = json.Marshal(respBody)
+		bodyBytes, _ := json.Marshal(respBody)
 		w.Write(bodyBytes)
 	}
 }
@@ -397,6 +408,28 @@ func AddNode(w http.ResponseWriter, r *http.Request) {
 	w.Write(bodyBytes)
 }
 
+func SendKeyVal(w http.ResponseWriter, r *http.Request) {
+	r.ParseForm()
+	Key := r.FormValue("key")
+	Value := r.FormValue("value")
+	//causal_payload := r.PostForm["causal_payload"]
+	// do relevant kvs ops
+	resp := _KVS.SetValue(Key, Value)
+	// response preparation
+	w.Header().Set("Content-Type", "application/json")
+	if resp == "" {
+		w.WriteHeader(201)
+		// put.Replaced = 0
+	} else {
+		w.WriteHeader(200)
+		// put.Replaced = 1
+	}
+	respBody := structs.PartitionResp{"success"}
+	bodyBytes, _ := json.Marshal(respBody)
+	w.Write(bodyBytes)
+
+}
+
 func customPrint() {
 	log.Print("- - - - - - - - - Custom Print - - - - - - - - -")
 	log.Print("          - - - - - Key | Values - - - - -")
@@ -443,6 +476,28 @@ func NewSet(w http.ResponseWriter, r *http.Request) {
 			// put.Owner = "undetermined"
 			w.WriteHeader(401)
 		} else {
+			living := findAllLiving(_my_node.Id)
+
+			for _, node := range living {
+				URL := "http://" + node.Ip + ":" + node.Port + "/sendKeyVal"
+				form := url.Values{}
+				form.Add("key", putForm.Key)
+				form.Add("val", putForm.Value)
+				/*for i := 0; i < len(putForm.Causal_Payload); i++ {
+					form.Add("causal_payload", string(putForm.Causal_Payload[i]))
+				}*/
+				formJSON := form.Encode()
+				// Request Creation
+				req, err := http.NewRequest(http.MethodPut, URL, strings.NewReader(formJSON))
+				req.Header.Add("Content-Type", "application/x-www-form-urlencoded")
+				// Request sending logic
+				client := &http.Client{
+					Timeout: time.Second,
+				}
+				_, err = client.Do(req)
+				ErrPanic(err)
+			}
+
 			// do relevant kvs ops
 			resp = _KVS.SetValue(putForm.Key, putForm.Value)
 			// response preparation

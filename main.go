@@ -31,6 +31,7 @@ func main() {
   router.HandleFunc("/viewchange", mainInstance.AddNode).Methods("PUT")
   router.HandleFunc("/networkMend", networkMend.HandleNetworkMend).Methods("PUT")
   router.HandleFunc("/heartbeat", heartMonitor.HBresponse).Methods("GET")
+  router.HandleFunc("/sendKeyVal", mainInstance.SendKeyVal).Methods("PUT")
 
 
   // listen on port 8080
