@@ -92,7 +92,8 @@ func viewToStruct(view string) [][]structs.NodeInfo {
 	// log.Print(strconv.Itoa(int(math.Ceil(float64(len(ips))/float64(_K)))))
 
 	/* main logic */
-	log.Print(_K)
+	
+	// Nash - hey so this allows the program to be run without testing = true
 	if (_K == 0) {
 		return nil
 	}

@@ -11,7 +11,7 @@ import (
 
 func Start(curr structs.NodeInfo, view *[][]structs.NodeInfo) {
     for {
-        time.Sleep(5000 * time.Millisecond)
+        time.Sleep(5000 * time.Millisecond) // 500 ms for production
         log.Print(curr.Ip)
         log.Print(*view)
         CheckNodes(*view, curr.Ip)
@@ -27,8 +27,9 @@ func CheckNodes(view [][]structs.NodeInfo, Ip string) {
                     view[i][j].Alive = false
                 } else {
                     if(node.Alive == false){
+                        log.Print("Resurrected node: "+node.Ip)
                         //networkMend.SendNetworkMend(node)
-                        node.Alive = true
+                        view[i][j].Alive = true
                     }
                 }
             }
