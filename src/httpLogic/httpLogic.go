@@ -18,6 +18,7 @@ var _n = int((^uint(0)) >> 1)
 
 // parses http.Request in view_update context
 func ViewUpdateForm(r *http.Request) structs.ViewUpdateForm {
+	log.Print("ViewUpdateForm")
 	r.ParseForm()
 	IpPort := r.FormValue("ip_port")
 	ip := _ip.FindString(IpPort)
@@ -27,6 +28,9 @@ func ViewUpdateForm(r *http.Request) structs.ViewUpdateForm {
 	// Everything will be in the body
 	//viewType, viewExists := r.URL.Query()["type"]
 	//if viewExists { viewUpdateForm.Type = viewType[0] }
+	log.Print("viewUpdateType: "+viewUpdateType)
+	log.Print("ip: "+ip)
+	log.Print("port: "+port)
 	return viewUpdateForm
 }
 
@@ -82,6 +86,7 @@ type kv struct {
 
 // creates http.Request array to notify all nodes of view_update
 func NotifyNodes(self structs.NodeInfo, viewForm structs.ViewUpdateForm, view [][]structs.NodeInfo) []*http.Request {
+	log.Print("NotifyNodes")
 	var requestStore []*http.Request
 
 	for _, part := range view {
@@ -106,7 +111,7 @@ func NotifyNodes(self structs.NodeInfo, viewForm structs.ViewUpdateForm, view []
     			req.Header.Add("Content-Type", "application/x-www-form-urlencoded")
 
     			requestStore = append(requestStore, req)
-            }
+        }
 		}
 	}
 	return requestStore

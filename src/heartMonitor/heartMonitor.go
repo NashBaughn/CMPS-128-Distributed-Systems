@@ -12,8 +12,8 @@ import (
 func BeginMonitor(view *[][]structs.NodeInfo) {
     for {
         time.Sleep(5000 * time.Millisecond)
-        log.Print(curr.Ip)
-        log.Print(*view)
+        // log.Print(curr.Ip)
+        // log.Print(*view)
         CheckNodes(*view)
     }
 }

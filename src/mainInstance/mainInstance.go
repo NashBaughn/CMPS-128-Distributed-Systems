@@ -33,6 +33,7 @@ func Start() {
 	_KVS = kvsAccess.NewKVS()
 
 	// fill global vars with ENV vars
+	log.Print("view: "+os.Getenv("VIEW"))
 	_view = viewToStruct(os.Getenv("VIEW"))
 	// _view = viewToStruct(os.Getenv("VIEW")) // regex logic in partition
 
@@ -255,6 +256,7 @@ func GetPartitionMembers(w http.ResponseWriter, r *http.Request) {
 
 // PUT Handler for sending view updates
 func SendViewUpdate(w http.ResponseWriter, r *http.Request) {
+	log.Print("SendViewUpdate")
 	// parse request and get relevant info (key, value, view_update, type, ip_port)
 	postForm := httpLogic.ViewUpdateForm(r)
 	// notify all nodes
@@ -277,6 +279,7 @@ func SendViewUpdate(w http.ResponseWriter, r *http.Request) {
 
 // Internal endpoint for handling View Update
 func PartitionHandler(w http.ResponseWriter, r *http.Request) {
+	log.Print("PartitionHandler")
 	// parse request and get relevant info (key, value, view_update, type, ip_port)
 	postForm := httpLogic.ViewUpdateForm(r)
 	w.WriteHeader(200)
@@ -298,7 +301,7 @@ func PartitionHandler(w http.ResponseWriter, r *http.Request) {
 		// respond with status
 		ind,_ :=findPartition(postForm.Ip)
 		respBody = structs.AddNodeResp{"success",ind, len(_view)}
-		bodyBytes, _ = json.Marshal(respBody)
+		bodyBytes, _ := json.Marshal(respBody)
 		w.Write(bodyBytes)
 	} else {
 		// update view
@@ -309,7 +312,7 @@ func PartitionHandler(w http.ResponseWriter, r *http.Request) {
 			sendRepartition()
 		}
 		respBody := structs.RemoveNodeResp{"success", len(_view)}
-		bodyBytes, _ = json.Marshal(respBody)
+		bodyBytes, _ := json.Marshal(respBody)
 		w.Write(bodyBytes)
 	}
 }
@@ -354,14 +357,14 @@ func sendUpdate(update structs.ViewUpdateForm) {
 	Ip := update.Ip
 	Port := update.Port
 	URL := "http://" + Ip + ":" + Port + "/viewchange"
+	log.Print("url: "+URL)
 	form := url.Values{}
 	form.Add("my_Ip", Ip)
-	form.Add("K", string(_K))
 	for _, part := range _view {
 		for _, node := range part {
 			form.Add("Ip", node.Ip)
 			form.Add("Port", node.Port)
-			form.Add("Id", string(node.Id))
+			form.Add("Id", strconv.Itoa(node.Id))
 			form.Add("Alive", strconv.FormatBool(node.Alive))
 		}
 	}
@@ -375,14 +378,18 @@ func sendUpdate(update structs.ViewUpdateForm) {
 
 // Recreates View table and sets node Info
 func AddNode(w http.ResponseWriter, r *http.Request) {
+	log.Print("AddNode")
 	r.ParseForm()
 	my_Ip := r.PostForm["my_Ip"]
 	Ip := r.PostForm["Ip"]
 	Port := r.PostForm["Port"]
 	Id := r.PostForm["Id"]
 	Alive := r.PostForm["Alive"]
-	_K,_ := strconv.Atoi(r.PostForm["K"][0])
-
+	log.Print("Ip: "+my_Ip[0])
+	log.Print("Port: "+Ip[0])
+	log.Print("Id: "+Id[0])
+	log.Print("Alive: "+Alive[0])
+	log.Print("_K: "+strconv.Itoa(_K))
 	_view = make([][]structs.NodeInfo, int(math.Ceil(float64(len(Ip))/float64(_K))))
 	for i, P := range Ip {
 		id, _ := strconv.Atoi(Id[i])
