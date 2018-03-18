@@ -30,7 +30,7 @@ func main() {
   router.HandleFunc("/partition", mainInstance.PartitionHandler).Methods("PUT")
   router.HandleFunc("/viewchange", mainInstance.AddNode).Methods("PUT")
   router.HandleFunc("/networkMend", networkMend.HandleNetworkMend).Methods("PUT")
-  router.HandleFunc("/heartbeat", heartMonitor.HBresponse).Methods("GET")
+  router.HandleFunc("/heartbeat", mainInstance.HBresponse).Methods("GET")
   router.HandleFunc("/sendKeyVal", mainInstance.SendKeyVal).Methods("PUT")
 
 

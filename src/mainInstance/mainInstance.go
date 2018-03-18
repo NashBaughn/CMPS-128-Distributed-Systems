@@ -37,6 +37,7 @@ func Start() {
 	_view = viewToStruct(os.Getenv("VIEW"))
 
 	log.Print(_my_node)
+	log.Print("My _K: "+strconv.Itoa(_K))
 	// start heartMonitor
 	go heartMonitor.Start(_my_node, &_view)
 }
@@ -56,9 +57,7 @@ var _n = int((^uint(0)) >> 1)
 func viewToStruct(view string) [][]structs.NodeInfo {
 
 	/* Data used in function */
-
 	var my_Ip string
-	var _K int
 	var ips []string
 	var ports []string
 
@@ -66,7 +65,7 @@ func viewToStruct(view string) [][]structs.NodeInfo {
 
 	if(testing) {
 		my_Ip = _ip.FindString(os.Getenv("10:.0.0.1:8080"))
-		_K, _ = strconv.Atoi("3")
+		_K = 3
 		ips = _ip.FindAllString("10.0.0.1:8080, 10.0.0.2:8080, 10.0.0.3:8080, 10.0.0.4:8080", _n)
 		ports = _port.FindAllString("10.0.0.1:8080, 10.0.0.1:8080, 10.0.0.1:8080, 10.0.0.1:8080", _n)
 	}
@@ -75,29 +74,34 @@ func viewToStruct(view string) [][]structs.NodeInfo {
 
 	if(!testing) {
 		my_Ip = _ip.FindString(os.Getenv("ip_port"))
-		_K, _ = strconv.Atoi(os.Getenv("K"))
+		log.Print("Real _K:" + os.Getenv("K"))
+		log.Print(strconv.Atoi(os.Getenv("K")))
+		K, _ := strconv.ParseInt(os.Getenv("K"),0,64)
+		_K = int(K)
+		log.Print("Temp _K: "+string(_K))
 		ips = _ip.FindAllString(view, _n)
 		ports = _port.FindAllString(view, _n)
 	}
 
 	/* Print sanity logs */
-
 	log.Print("my_Ip_Port: "+my_Ip)
 	// log.Print("ips: "+strings.Join(ips, ""))
 	// log.Print("len(ips): "+strconv.Itoa(len(ips)))
-	log.Print("_K: "+strconv.Itoa(_K))
+
 	// log.Print("float64(len(ip)): "+strconv.FormatFloat(float64(len(ips)), 'E', -1, 64))
 	// log.Print("float64(_K): "+strconv.FormatFloat(float64(_K), 'E', -1, 64))
 	// log.Print("float(len(ips)) / float64(_K): "+strconv.FormatFloat(float64(len(ips))/float64(_K), 'E', -1, 64))
 	// log.Print(strconv.Itoa(int(math.Ceil(float64(len(ips))/float64(_K)))))
 
 	/* main logic */
-	
+
 	// Nash - hey so this allows the program to be run without testing = true
 	if (_K == 0) {
 		return nil
 	}
+	log.Print("Ips Length: "+string(len(ips)))
 	var View = make([][]structs.NodeInfo, int(math.Ceil(float64(len(ips))/float64(_K))))
+	log.Print("View Length: "+string(len(View)))
 	part_Id := 0
 	for i, ip := range(ips) {
 		temp := structs.NodeInfo{ip, ports[i], part_Id, true}
@@ -369,6 +373,7 @@ func RepartitionHandler(w http.ResponseWriter, r *http.Request) {
 
 // Sends all View Info to new node
 func sendUpdate(update structs.ViewUpdateForm) {
+	log.Print("Sending Update to new Node")
 	Ip := update.Ip
 	Port := update.Port
 	URL := "http://" + Ip + ":" + Port + "/viewchange"
@@ -388,31 +393,39 @@ func sendUpdate(update structs.ViewUpdateForm) {
 	req.Header.Add("Content-Type", "application/x-www-form-urlencoded")
 	client := &http.Client{}
 	_, err := client.Do(req)
+
+	log.Print("Trying to send the goodz")
 	ErrPanic(err)
+	log.Print("I sent the goodz")
 }
 
 // Recreates View table and sets node Info
 func AddNode(w http.ResponseWriter, r *http.Request) {
+	log.Print("Filling out my Info cuz I'm a newbie")
 	r.ParseForm()
-	my_Ip := r.PostForm["my_Ip"]
+	my_Ip := r.FormValue("my_Ip")
 	Ip := r.PostForm["Ip"]
 	Port := r.PostForm["Port"]
 	Id := r.PostForm["Id"]
 	Alive := r.PostForm["Alive"]
-	_K,_ := strconv.Atoi(r.PostForm["K"][0])
-
+	/*K := r.FormValue("K")
+	log.Print("Real K:" + K)
+	_K,_ = strconv.Atoi(K)*/
+	log.Print("My K:" + strconv.Itoa(_K))
 	_view = make([][]structs.NodeInfo, int(math.Ceil(float64(len(Ip))/float64(_K))))
+	log.Print("Length of View:" + string(len(_view)))
 	for i, P := range Ip {
 		id, _ := strconv.Atoi(Id[i])
 		live, _ := strconv.ParseBool(Alive[i])
 		temp := structs.NodeInfo{P, Port[i], id, live}
-		if (my_Ip[0] == P) {_my_node = temp}
+		if (my_Ip == P) {_my_node = temp}
 		_view[id] = append(_view[id], temp)
 	}
 	respBody := structs.PartitionResp{"success"}
 	bodyBytes, _ := json.Marshal(respBody)
 	w.WriteHeader(200)
 	w.Write(bodyBytes)
+	log.Print("Succesfully recieved the goodz")
 }
 
 func SendKeyVal(w http.ResponseWriter, r *http.Request) {

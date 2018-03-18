@@ -20,7 +20,7 @@ func Start(curr structs.NodeInfo, view *[][]structs.NodeInfo) {
 
 func CheckNodes(view [][]structs.NodeInfo, Ip string) {
     for i, row := range view {
-        for j, node := range row {         
+        for j, node := range row {
             if (Ip != node.Ip){
                 if(!SendPulse(node)){
                     log.Print("Dead node: "+node.Ip)
@@ -33,14 +33,14 @@ func CheckNodes(view [][]structs.NodeInfo, Ip string) {
                     }
                 }
             }
-            
+
         }
     }
 }
 
 func SendPulse(node structs.NodeInfo) bool{
     URL := "http://" + node.Ip + ":" + node.Port + "/heartbeat"
-    log.Print(URL)
+    //log.Print(URL)
     resp, err := http.Get(URL)
     if err != nil{
         log.Print(err)
@@ -50,9 +50,6 @@ func SendPulse(node structs.NodeInfo) bool{
     if resp.StatusCode != 200 {
         return false
     }
-    log.Print(resp)
+    //log.Print(resp)
     return true
 }
-
-
-
