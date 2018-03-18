@@ -4,7 +4,7 @@ import (
     "mainInstance"
     "networkMend"
     "github.com/gorilla/mux"
-    "heartMonitor"
+    //"heartMonitor"
     "net/http"
     "log"
 )
@@ -30,7 +30,7 @@ func main() {
   router.HandleFunc("/partition", mainInstance.PartitionHandler).Methods("PUT")
   router.HandleFunc("/viewchange", mainInstance.AddNode).Methods("PUT")
   router.HandleFunc("/networkMend", networkMend.HandleNetworkMend).Methods("PUT")
-  router.HandleFunc("/heartbeat", heartMonitor.HBresponse).Methods("GET")
+  router.HandleFunc("/heartbeat", mainInstance.HBresponse).Methods("GET")
 
 
   // listen on port 8080

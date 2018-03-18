@@ -3,52 +3,55 @@ package heartMonitor
 import (
     "time"
     "net/http"
-    "networkMend"
+    "log"
+    //"networkMend"
     "structs"
-    "mainInstance"
 )
 
 
-func BeginMonitor(view *[][]structs.NodeInfo) {
+func Start(curr structs.NodeInfo, view *[][]structs.NodeInfo) {
     for {
         time.Sleep(5000 * time.Millisecond)
         log.Print(curr.Ip)
         log.Print(*view)
-        CheckNodes(*view)
+        CheckNodes(*view, curr.Ip)
     }
 }
 
-func CheckNodes(view [][]structs.NodeInfo) {
-    for _, row := range view {
-        for _, node := range row {
-            if(!SendPulse(node)){
-                node.Alive = false
-            } else {
-                if(node.Alive == false){
-                    networkMend.SendNetworkMend(node)
-                    node.Alive = true
+func CheckNodes(view [][]structs.NodeInfo, Ip string) {
+    for i, row := range view {
+        for j, node := range row {         
+            if (Ip != node.Ip){
+                if(!SendPulse(node)){
+                    log.Print("Dead node: "+node.Ip)
+                    view[i][j].Alive = false
+                } else {
+                    if(node.Alive == false){
+                        //networkMend.SendNetworkMend(node)
+                        node.Alive = true
+                    }
                 }
             }
-
+            
         }
     }
 }
 
 func SendPulse(node structs.NodeInfo) bool{
     URL := "http://" + node.Ip + ":" + node.Port + "/heartbeat"
+    log.Print(URL)
     resp, err := http.Get(URL)
-    mainInstance.ErrPanic(err)
+    if err != nil{
+        log.Print(err)
+        return false
+    }
     defer resp.Body.Close()
-    // _, err = ioutil.ReadAll(resp.Body)
     if resp.StatusCode != 200 {
         return false
     }
+    log.Print(resp)
     return true
 }
 
-// author: Alec
-// purpose: placeholder for heartbeat request handling endpoint
-// TODO: I added this so I could run our code against the test script
-func HBresponse (w http.ResponseWriter, r *http.Request) {
 
-}
+
