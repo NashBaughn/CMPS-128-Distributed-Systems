@@ -111,7 +111,7 @@ type NewGETResp struct {
 	Message string `json:"msg"`
 	Value   string `json:"value"`
 	Partition_Id int `json:"partition_id"`
-	Causal_Payload []int `json:"causal_payload"`
+	Causal_Payload string `json:"causal_payload"`
 	Timestamp time.Time `json:"timestamp"` // do we want this as an int?
 }
 
@@ -122,7 +122,7 @@ type NewGETResp struct {
 type NewPUTResp struct {
 	Message string `json:"msg"`
 	Partition_Id int `json:"partition_id"`
-	Causal_Payload []int `json:"causal_payload"`
+	Causal_Payload string `json:"causal_payload"`
 	Timestamp time.Time `json:"timestamp"` // do we want this as an int?
 }
 

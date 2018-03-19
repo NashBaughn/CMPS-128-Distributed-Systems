@@ -37,7 +37,13 @@ func Start() {
 	// fill global vars with ENV vars
 	log.Print("view: "+os.Getenv("VIEW"))
 	_view = viewToStruct(os.Getenv("VIEW"))
+	PrintView()
 
+	for i, _ := range(_view) {
+		_causal_Payload = append(_causal_Payload, i)
+	}
+
+	log.Print("_my_node:")
 	log.Print(_my_node)
 	// start heartMonitor
 	if(hM) {go heartMonitor.Start(_my_node, &_view)}
@@ -94,7 +100,6 @@ func viewToStruct(view string) [][]structs.NodeInfo {
 	// log.Print(strconv.Itoa(int(math.Ceil(float64(len(ips))/float64(_K)))))
 
 	/* main logic */
-	log.Print(_K)
 	if (_K == 0) {
 		return nil
 	}
@@ -110,7 +115,7 @@ func viewToStruct(view string) [][]structs.NodeInfo {
 			part_Id++
 		}
 	}
-	PrintView()
+
 	return View
 }
 
@@ -137,6 +142,14 @@ func GetKVS() *kvsAccess.KeyValStore {
 
 func SetKVS(newKVS *kvsAccess.KeyValStore) {
 	_KVS = newKVS
+}
+
+func StringifyPayload() string {
+	var payload_string = ""
+	for _, load := range(_causal_Payload) {
+		payload_string += (","+strconv.Itoa(load))
+	}
+	return payload_string
 }
 
 func GetPayload() []int {
@@ -284,12 +297,12 @@ func SendViewUpdate(w http.ResponseWriter, r *http.Request) {
 		_, err := client.Do(req)
 		ErrPanic(err)
 	}
+	// Reuses partition logic
+	PartitionHandler(w, r)
 	// if adding new node send updated view table
 	if postForm.Type == "add" {
 		sendUpdate(postForm)
 	}
-	// Reuses partition logic
-	PartitionHandler(w, r)
 }
 
 // Internal endpoint for handling View Update
@@ -385,20 +398,12 @@ func sendUpdate(update structs.ViewUpdateForm) {
 	log.Print("url: "+URL)
 	form := url.Values{}
 	form.Add("my_Ip", Ip)
-	for v, part := range _view {
+	for _, part := range _view {
 		for _, node := range part {
 			form.Add("Ip", node.Ip)
 			form.Add("Port", node.Port)
 			form.Add("Id", strconv.Itoa(node.Id))
 			form.Add("Alive", strconv.FormatBool(node.Alive))
-		}
-		if (v == len(_view)-1) {
-			form.Add("Ip", update.Ip)
-			form.Add("Port", update.Port)
-		 	id := v
-			if (len(part) == _K) { id += 1 }
-			form.Add("Id", strconv.Itoa(id))
-			form.Add("Alive", strconv.FormatBool(true))
 		}
 	}
 	formJSON := form.Encode()
@@ -456,9 +461,10 @@ func customPrint() {
 
 // new PUT handler for kvs manipulations
 func NewSet(w http.ResponseWriter, r *http.Request) {
+	log.Print("NewSet()")
 	// log.Print("PUT request received")
 	// var initialization
-	put := structs.NewPUTResp{"success", _my_node.Id, _causal_Payload, time.Now()}
+	put := structs.NewPUTResp{"success", _my_node.Id, StringifyPayload(), time.Now()}
 	putForm := httpLogic.PutForm(r)
 	log.Print("key: "+putForm.Key)
 	log.Print("value: "+putForm.Value)
@@ -509,6 +515,7 @@ func NewSet(w http.ResponseWriter, r *http.Request) {
 
 // New GET Handler
 func NewGet(w http.ResponseWriter, r *http.Request) {
+	log.Print("NewGet()")
 	w.Header().Set("Content-Type", "application/json")
 	// parse request for relevant data (key, get_number_of_keys)
 	key, keyExists := r.URL.Query()["key"]
@@ -537,7 +544,7 @@ func NewGet(w http.ResponseWriter, r *http.Request) {
 			getError := structs.ERROR{"error", "key does not exist"}
 			jsonResponse, err = json.Marshal(getError)
 		} else {
-			get := structs.NewGETResp{"success", resp, _my_node.Id, _causal_Payload, time.Now()}
+			get := structs.NewGETResp{"success", resp, _my_node.Id, StringifyPayload(), time.Now()}
 			w.WriteHeader(200)
 			jsonResponse, err = json.Marshal(get)
 		}
