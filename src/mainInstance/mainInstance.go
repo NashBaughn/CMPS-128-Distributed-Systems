@@ -189,17 +189,84 @@ func findAllLiving(ind int) []structs.NodeInfo {
 
 // removes an element from _view
 func removeView(i int, j int) {
-	// Part := _view[i]
-	// if (len(Part) - 1) == j {
-	// 	Part = Part[:j]
-	// } else {
-	// 	Part = append(Part[:j], Part[j+1:]...)
-	// }
-	if ((len(_view[i]) - 1) == j) {
-		_view[i] = _view[i][:j]
+	//log.Print("In Remove View, removing:")
+	Part := _view[i]
+	//log.Print(Part[j])
+	if (len(Part) - 1) == j {
+	 	Part = Part[:j]
 	} else {
-		_view[i] = append(_view[i][:j], _view[i][j+1:]...)
+ 		Part = append(Part[:j], Part[j+1:]...)
 	}
+	//log.Print("Changing old partition from:")
+	OldPart := _view[len(_view)-1]
+	//log.Print(OldPart)
+	OldNode := OldPart[len(OldPart)-1]
+	OldNode.Id = i
+	if (len(OldPart) == 1){
+		_view = _view[:len(_view)-1]
+	}else {
+		_view[len(_view)-1] = OldPart[:len(OldPart)-1]
+	}
+	//log.Print("To:")
+	//log.Print(OldPart)
+	Part = append(Part, OldNode)
+	if (_my_node.Id == i){
+		SendKVSkMend(OldNode)
+	}
+
+}
+
+func SendKVSkMend (Node structs.NodeInfo) {
+    Ip := Node.Ip
+	Port := Node.Port
+	URL := "http://" + Ip + ":" + Port + "/KVSMend"
+	form := url.Values{}
+	for key, val := range GetKVS().Store {
+		form.Add("Key", key)
+		form.Add("Val", val)
+	}
+    for _, val := range GetPayload() {
+        form.Add("Payload", string(val))
+    }
+	formJSON := form.Encode()
+	req, _ := http.NewRequest(http.MethodPut, URL, strings.NewReader(formJSON))
+	req.Header.Add("Content-Type", "application/x-www-form-urlencoded")
+	client := &http.Client{}
+	_, err := client.Do(req)
+    if err != nil {
+		panic(err)
+	}
+}
+
+// Retrieves new KVS from other node in partition
+// Checks the Causal Payload to see if it is newer than current one
+func HandleKVSMend (w http.ResponseWriter, r *http.Request) {
+    r.ParseForm()
+    Payload := r.PostForm["Payload"]
+    newer := true
+    var newPayload []int
+    for ind, my_num := range GetPayload() {
+        new_num,_  := strconv.Atoi(Payload[ind])
+        if my_num > new_num {
+            newer = false
+            break
+        }
+        newPayload[ind] = new_num
+    }
+    if newer {
+        newKVS := kvsAccess.NewKVS()
+		keys := r.PostForm["Key"]
+		vals := r.PostForm["Val"]
+        for i, key := range keys {
+            newKVS.SetValue(key, vals[i])
+        }
+        SetKVS(newKVS)
+        SetPayload(newPayload)
+    }
+    respBody := structs.PartitionResp{"success"}
+    bodyBytes, _ := json.Marshal(respBody)
+    w.WriteHeader(200)
+    w.Write(bodyBytes)
 }
 
 // because a lot of error checking occurs
@@ -301,12 +368,12 @@ func SendViewUpdate(w http.ResponseWriter, r *http.Request) {
 		_, err := client.Do(req)
 		ErrPanic(err)
 	}
+	// Reuses partition logic
+	PartitionHandler(w, r)
 	// if adding new node send updated view table
 	if postForm.Type == "add" {
 		sendUpdate(postForm)
 	}
-	// Reuses partition logic
-	PartitionHandler(w, r)
 }
 
 // Internal endpoint for handling View Update
@@ -360,7 +427,6 @@ func PartitionHandler(w http.ResponseWriter, r *http.Request) {
 		bodyBytes, _ := json.Marshal(respBody)
 		w.Write(bodyBytes)
 	}
-	log.Print("New View:" )
 	log.Print(_view)
 	log.Print("Leaving Partition Handler")
 }
@@ -411,21 +477,19 @@ func sendUpdate(update structs.ViewUpdateForm) {
 	log.Print("url: "+URL)
 	form := url.Values{}
 	form.Add("my_Ip", Ip)
-	for v, part := range _view {
+	for _, part := range _view {
 		for _, node := range part {
 			form.Add("Ip", node.Ip)
 			form.Add("Port", node.Port)
 			form.Add("Id", strconv.Itoa(node.Id))
 			form.Add("Alive", strconv.FormatBool(node.Alive))
 		}
-		if (v == len(_view)-1) {
-			form.Add("Ip", update.Ip)
-			form.Add("Port", update.Port)
-		 	id := v
-			if (len(part) == _K) { id += 1 }
-			form.Add("Id", strconv.Itoa(id))
-			form.Add("Alive", strconv.FormatBool(true))
-		}
+		// if (v == len(_view)) {
+		// 	form.Add("Ip", update.Ip)
+		// 	form.Add("Port", update.Port)
+		// 	form.Add("Id", strconv.Itoa(update.Id))
+		// 	form.Add("Alive", strconv.FormatBool(update.Alive))
+		// }
 	}
 	formJSON := form.Encode()
 	req, _ := http.NewRequest(http.MethodPut, URL, strings.NewReader(formJSON))
@@ -471,6 +535,8 @@ func AddNode(w http.ResponseWriter, r *http.Request) {
 	bodyBytes, _ := json.Marshal(respBody)
 	w.WriteHeader(200)
 	w.Write(bodyBytes)
+	log.Print("View after adding myself")
+	PrintView()
 	log.Print("Succesfully recieved the goodz")
 }
 
