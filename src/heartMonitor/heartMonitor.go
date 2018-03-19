@@ -12,6 +12,7 @@ import (
 func Start(curr structs.NodeInfo, view *[][]structs.NodeInfo) {
     for {
         time.Sleep(500 * time.Millisecond) // 500 ms for production
+        log.Print("HeartBeat")
         log.Print(curr.Ip)
         log.Print(*view)
         CheckNodes(*view, curr.Ip)

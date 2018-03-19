@@ -28,18 +28,20 @@ var _K int
 var _causal_Payload []int
 
 var testing = false
+var hM = false
 
 func Start() {
 	//init instance of our global kvs
 	_KVS = kvsAccess.NewKVS()
 
 	// fill global vars with ENV vars
+	log.Print("view: "+os.Getenv("VIEW"))
 	_view = viewToStruct(os.Getenv("VIEW"))
 
 	log.Print(_my_node)
 	log.Print("My _K: "+strconv.Itoa(_K))
 	// start heartMonitor
-	go heartMonitor.Start(_my_node, &_view)
+	if(hM) {go heartMonitor.Start(_my_node, &_view)}
 }
 
 // // // // // // // // // // // // // //
@@ -55,6 +57,7 @@ var _n = int((^uint(0)) >> 1)
 // update: fixed some bugs and added some dummy data
 // purpose: the code now runs with no compile or run-time errors/warnings
 func viewToStruct(view string) [][]structs.NodeInfo {
+	log.Print("viewToStruct")
 
 	/* Data used in function */
 	var my_Ip string
@@ -113,15 +116,7 @@ func viewToStruct(view string) [][]structs.NodeInfo {
 			part_Id++
 		}
 	}
-	log.Print("------------------------------------")
-	log.Print("num of partitions: "+strconv.Itoa(len(View)))
-	for i, part := range(View) {
-		log.Print("partition "+strconv.Itoa(i)+":")
-		for k, node := range(part) {
-			log.Print(strconv.Itoa(k)+"th Ip: "+node.Ip+" Port: "+node.Port+" Id: "+strconv.Itoa(node.Id)+" Alive: "+strconv.FormatBool(node.Alive))
-		}
-	}
-	log.Print("------------------------------------")
+	PrintView()
 	return View
 }
 
@@ -194,11 +189,16 @@ func findAllLiving(ind int) []structs.NodeInfo {
 
 // removes an element from _view
 func removeView(i int, j int) {
-	Part := _view[i]
-	if (len(Part) - 1) == j {
-		Part = Part[:j]
+	// Part := _view[i]
+	// if (len(Part) - 1) == j {
+	// 	Part = Part[:j]
+	// } else {
+	// 	Part = append(Part[:j], Part[j+1:]...)
+	// }
+	if ((len(_view[i]) - 1) == j) {
+		_view[i] = _view[i][:j]
 	} else {
-		Part = append(Part[:j], Part[j+1:]...)
+		_view[i] = append(_view[i][:j], _view[i][j+1:]...)
 	}
 }
 
@@ -212,6 +212,17 @@ func ErrPanicStr(cond bool, err string) {
 	if !cond {
 		panic(err)
 	}
+}
+func PrintView() {
+	log.Print("------------------------------------")
+	log.Print("num of partitions: "+strconv.Itoa(len(_view)))
+	for i, part := range(_view) {
+		log.Print("partition "+strconv.Itoa(i)+":")
+		for k, node := range(part) {
+			log.Print(strconv.Itoa(k)+"th Ip: "+node.Ip+" Port: "+node.Port+" Id: "+strconv.Itoa(node.Id)+" Alive: "+strconv.FormatBool(node.Alive))
+		}
+	}
+	log.Print("------------------------------------")
 }
 
 // // // // // // // // // // // // // //
@@ -277,6 +288,7 @@ func GetPartitionMembers(w http.ResponseWriter, r *http.Request) {
 
 // PUT Handler for sending view updates
 func SendViewUpdate(w http.ResponseWriter, r *http.Request) {
+	log.Print("SendViewUpdate")
 	// parse request and get relevant info (key, value, view_update, type, ip_port)
 	postForm := httpLogic.ViewUpdateForm(r)
 	// notify all nodes
@@ -299,6 +311,7 @@ func SendViewUpdate(w http.ResponseWriter, r *http.Request) {
 
 // Internal endpoint for handling View Update
 func PartitionHandler(w http.ResponseWriter, r *http.Request) {
+	log.Print("PartitionHandler")
 	// parse request and get relevant info (key, value, view_update, type, ip_port)
 	log.Print("In Partition Handler")
 	postForm := httpLogic.ViewUpdateForm(r)
@@ -307,10 +320,12 @@ func PartitionHandler(w http.ResponseWriter, r *http.Request) {
 	if postForm.Type == "add" {
 		log.Print("Adding new Node:" + postForm.Ip)
 		// update view
+		log.Print("view before add: ")
+		PrintView()
 		var respBody structs.AddNodeResp
 		for i, part := range _view {
 			if (len(part) < _K) {
-				part = append(part, structs.NodeInfo{postForm.Ip, postForm.Port, i, true})
+				_view[i] = append(part, structs.NodeInfo{postForm.Ip, postForm.Port, i, true})
 				break
 			}
 			if (i+1 == len(_view)) {
@@ -320,6 +335,8 @@ func PartitionHandler(w http.ResponseWriter, r *http.Request) {
 				sendRepartition()
 			}
 		}
+		log.Print("view after add:")
+		PrintView()
 		// respond with status
 		ind,_ :=findPartition(postForm.Ip)
 		respBody = structs.AddNodeResp{"success",ind, len(_view)}
@@ -328,6 +345,8 @@ func PartitionHandler(w http.ResponseWriter, r *http.Request) {
 	} else {
 		log.Print("Removing Node:" + postForm.Ip)
 		// update view
+		log.Print("view before remove:")
+		PrintView()
 		partIndex, nodeIndex := findPartition(postForm.Ip)
 		ErrPanicStr(partIndex != -1, "ip does not exist!: "+postForm.Ip)
 		removeView(partIndex, nodeIndex)
@@ -335,11 +354,14 @@ func PartitionHandler(w http.ResponseWriter, r *http.Request) {
 			log.Print("Sending Repartition")
 			sendRepartition()
 		}
+		log.Print("view after remove:")
+		PrintView()
 		respBody := structs.RemoveNodeResp{"success", len(_view)}
 		bodyBytes, _ := json.Marshal(respBody)
 		w.Write(bodyBytes)
 	}
-	log.Print("New View:" + _view)
+	log.Print("New View:" )
+	log.Print(_view)
 	log.Print("Leaving Partition Handler")
 }
 
@@ -386,16 +408,22 @@ func sendUpdate(update structs.ViewUpdateForm) {
 	Ip := update.Ip
 	Port := update.Port
 	URL := "http://" + Ip + ":" + Port + "/viewchange"
+	log.Print("url: "+URL)
 	form := url.Values{}
 	form.Add("my_Ip", Ip)
-	form.Add("K", string(_K))
 	for _, part := range _view {
 		for _, node := range part {
 			form.Add("Ip", node.Ip)
 			form.Add("Port", node.Port)
-			form.Add("Id", string(node.Id))
+			form.Add("Id", strconv.Itoa(node.Id))
 			form.Add("Alive", strconv.FormatBool(node.Alive))
 		}
+		// if (v == len(_view)) {
+		// 	form.Add("Ip", update.Ip)
+		// 	form.Add("Port", update.Port)
+		// 	form.Add("Id", strconv.Itoa(update.Id))
+		// 	form.Add("Alive", strconv.FormatBool(update.Alive))
+		// }
 	}
 	formJSON := form.Encode()
 	req, _ := http.NewRequest(http.MethodPut, URL, strings.NewReader(formJSON))
@@ -424,12 +452,19 @@ func AddNode(w http.ResponseWriter, r *http.Request) {
 	_view = make([][]structs.NodeInfo, int(math.Ceil(float64(len(Ip))/float64(_K))))
 	log.Print("Length of View:" + string(len(_view)))
 	for i, P := range Ip {
+		log.Print("Ip: "+Ip[i])
+		log.Print("Port: "+Port[i])
+		log.Print("Id: "+Id[i])
+		log.Print("Alive: "+Alive[i])
 		id, _ := strconv.Atoi(Id[i])
 		live, _ := strconv.ParseBool(Alive[i])
 		temp := structs.NodeInfo{P, Port[i], id, live}
 		if (my_Ip == P) {_my_node = temp}
+		log.Print("My Node:")
+		log.Print(_my_node)
 		_view[id] = append(_view[id], temp)
 	}
+	log.Print("_my_node= ip:"+_my_node.Ip+" port:"+_my_node.Port+" id:"+strconv.Itoa(_my_node.Id)+" alive:"+strconv.FormatBool(_my_node.Alive))
 	respBody := structs.PartitionResp{"success"}
 	bodyBytes, _ := json.Marshal(respBody)
 	w.WriteHeader(200)
