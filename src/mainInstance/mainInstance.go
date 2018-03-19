@@ -411,19 +411,21 @@ func sendUpdate(update structs.ViewUpdateForm) {
 	log.Print("url: "+URL)
 	form := url.Values{}
 	form.Add("my_Ip", Ip)
-	for _, part := range _view {
+	for v, part := range _view {
 		for _, node := range part {
 			form.Add("Ip", node.Ip)
 			form.Add("Port", node.Port)
 			form.Add("Id", strconv.Itoa(node.Id))
 			form.Add("Alive", strconv.FormatBool(node.Alive))
 		}
-		// if (v == len(_view)) {
-		// 	form.Add("Ip", update.Ip)
-		// 	form.Add("Port", update.Port)
-		// 	form.Add("Id", strconv.Itoa(update.Id))
-		// 	form.Add("Alive", strconv.FormatBool(update.Alive))
-		// }
+		if (v == len(_view)-1) {
+			form.Add("Ip", update.Ip)
+			form.Add("Port", update.Port)
+		 	id := v
+			if (len(part) == _K) { id += 1 }
+			form.Add("Id", strconv.Itoa(id))
+			form.Add("Alive", strconv.FormatBool(true))
+		}
 	}
 	formJSON := form.Encode()
 	req, _ := http.NewRequest(http.MethodPut, URL, strings.NewReader(formJSON))
