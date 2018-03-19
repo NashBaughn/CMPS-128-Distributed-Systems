@@ -4,18 +4,20 @@ import (
     "time"
     "net/http"
     "log"
-    //"networkMend"
+    "mainInstance"
     "structs"
 )
 
 
-func Start(curr structs.NodeInfo, view *[][]structs.NodeInfo) {
+func Start() {
     for {
         time.Sleep(100 * time.Millisecond) // 500 ms for production
-        log.Print("HeartBeat")
-        log.Print(curr.Ip)
-        log.Print(*view)
-        CheckNodes(*view, curr.Ip)
+        //log.Print("HeartBeat")
+        view := mainInstance.GetView()
+        curr := mainInstance.GetNode()
+        //log.Print(curr.Ip)
+        //log.Print(view)
+        CheckNodes(view, curr.Ip)
     }
 }
 
@@ -29,7 +31,7 @@ func CheckNodes(view [][]structs.NodeInfo, Ip string) {
                 } else {
                     if(node.Alive == false){
                         log.Print("Resurrected node: "+node.Ip)
-                        //networkMend.SendNetworkMend(node)
+                        mainInstance.SendKVSMend(node)
                         view[i][j].Alive = true
                     }
                 }
@@ -43,11 +45,15 @@ func SendPulse(node structs.NodeInfo) bool{
     URL := "http://" + node.Ip + ":" + node.Port + "/heartbeat"
     //log.Print(URL)
     resp, err := http.Get(URL)
+    if err != nil{
+        log.Print(err)
+        return false
+    }
     timeout := time.Duration(1 * time.Second)
     client := http.Client{
         Timeout: timeout,
     }
-    client.Get(URL)
+    _, err = client.Get(URL)
     if err != nil{
         log.Print(err)
         return false

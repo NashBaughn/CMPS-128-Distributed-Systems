@@ -4,15 +4,19 @@ import (
     "mainInstance"
     //"networkMend"
     "github.com/gorilla/mux"
-    //"heartMonitor"
+    "heartMonitor"
     "net/http"
     "log"
 )
 
+var hM = true
+
 func main() {
 
   mainInstance.Start()
+  if(hM) {go heartMonitor.Start()}
   log.Print("main_instance has started!")
+
 
   // create router instance
   router := mux.NewRouter()

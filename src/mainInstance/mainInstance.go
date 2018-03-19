@@ -11,8 +11,7 @@ import (
 	"partition"
 	"regexp"
 	"structs"
-	"heartMonitor"
-	// "strconv"
+	//"heartMonitor"
 	"io/ioutil"
 	"math"
 	"net/url"
@@ -28,7 +27,6 @@ var _K int
 var _causal_Payload []int
 
 var testing = false
-var hM = false
 
 func Start() {
 	//init instance of our global kvs
@@ -47,7 +45,7 @@ func Start() {
 	log.Print(_my_node)
 	log.Print("My _K: "+strconv.Itoa(_K))
 	// start heartMonitor
-	if(hM) {go heartMonitor.Start(_my_node, &_view)}
+
 }
 
 // // // // // // // // // // // // // //
@@ -103,11 +101,8 @@ func viewToStruct(view string) [][]structs.NodeInfo {
 	// log.Print(strconv.Itoa(int(math.Ceil(float64(len(ips))/float64(_K)))))
 
 	/* main logic */
-<<<<<<< HEAD
-=======
 
 	// Nash - hey so this allows the program to be run without testing = true
->>>>>>> e8070e1066efbff581b03042b96adc5ef173cd9a
 	if (_K == 0) {
 		return nil
 	}
@@ -127,6 +122,14 @@ func viewToStruct(view string) [][]structs.NodeInfo {
 	}
 
 	return View
+}
+
+func GetView() [][]structs.NodeInfo {
+	return _view
+}
+
+func GetNode() structs.NodeInfo {
+	return _my_node
 }
 
 // converts ip:port string in structs.IpPort
@@ -228,12 +231,12 @@ func removeView(i int, j int) {
 	//log.Print(OldPart)
 	Part = append(Part, OldNode)
 	if (_my_node.Id == i){
-		SendKVSkMend(OldNode)
+		SendKVSMend(OldNode)
 	}
 
 }
 
-func SendKVSkMend (Node structs.NodeInfo) {
+func SendKVSMend (Node structs.NodeInfo) {
     Ip := Node.Ip
 	Port := Node.Port
 	URL := "http://" + Ip + ":" + Port + "/KVSMend"
@@ -559,8 +562,10 @@ func AddNode(w http.ResponseWriter, r *http.Request) {
 
 func SendKeyVal(w http.ResponseWriter, r *http.Request) {
 	r.ParseForm()
+	log.Print("In Send Key Val")
 	Key := r.FormValue("key")
-	Value := r.FormValue("value")
+	Value := r.FormValue("val")
+	log.Print("Key: " +Key + ", Val: " + Value)
 	//causal_payload := r.PostForm["causal_payload"]
 	// do relevant kvs ops
 	resp := _KVS.SetValue(Key, Value)
@@ -617,6 +622,7 @@ func NewSet(w http.ResponseWriter, r *http.Request) {
 	}
 	// key belongs to this node
 	if partition.KeyBelongs(putForm.Key, _my_node.Id, _view) {
+		log.Print("Key Belongs to me")
 		var resp string
 		// check validitiy of key
 		if !keyValid(putForm.Key) {
@@ -626,6 +632,8 @@ func NewSet(w http.ResponseWriter, r *http.Request) {
 			// put.Owner = "undetermined"
 			w.WriteHeader(401)
 		} else {
+			log.Print("Current View:")
+			PrintView()
 			living := findAllLiving(_my_node.Id)
 
 			for _, node := range living {
@@ -638,7 +646,7 @@ func NewSet(w http.ResponseWriter, r *http.Request) {
 				}*/
 				formJSON := form.Encode()
 				// Request Creation
-				req, err := http.NewRequest(http.MethodPut, URL, strings.NewReader(formJSON))
+				req, _ := http.NewRequest(http.MethodPut, URL, strings.NewReader(formJSON))
 				req.Header.Add("Content-Type", "application/x-www-form-urlencoded")
 				// Request sending logic
 				client := &http.Client{
@@ -662,9 +670,11 @@ func NewSet(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		// respond
+		log.Print("Sending Response")
 		jsonResponse, err := json.Marshal(put)
 		ErrPanic(err)
 		w.Write(jsonResponse)
+		log.Print("Response Sent")
 		return
 	}
 	// Not Mine
@@ -673,7 +683,7 @@ func NewSet(w http.ResponseWriter, r *http.Request) {
 
 // New GET Handler
 func NewGet(w http.ResponseWriter, r *http.Request) {
-	log.Print("NewGet()")
+	log.Print("In NewGet")
 	w.Header().Set("Content-Type", "application/json")
 	// parse request for relevant data (key, get_number_of_keys)
 	key, keyExists := r.URL.Query()["key"]
