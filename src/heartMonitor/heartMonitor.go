@@ -11,7 +11,8 @@ import (
 
 func Start(curr structs.NodeInfo, view *[][]structs.NodeInfo) {
     for {
-        time.Sleep(5000 * time.Millisecond)
+        time.Sleep(100 * time.Millisecond) // 500 ms for production
+        log.Print("HeartBeat")
         log.Print(curr.Ip)
         log.Print(*view)
         CheckNodes(*view, curr.Ip)
@@ -27,8 +28,9 @@ func CheckNodes(view [][]structs.NodeInfo, Ip string) {
                     view[i][j].Alive = false
                 } else {
                     if(node.Alive == false){
+                        log.Print("Resurrected node: "+node.Ip)
                         //networkMend.SendNetworkMend(node)
-                        node.Alive = true
+                        view[i][j].Alive = true
                     }
                 }
             }
@@ -39,8 +41,13 @@ func CheckNodes(view [][]structs.NodeInfo, Ip string) {
 
 func SendPulse(node structs.NodeInfo) bool{
     URL := "http://" + node.Ip + ":" + node.Port + "/heartbeat"
-    log.Print(URL)
+    //log.Print(URL)
     resp, err := http.Get(URL)
+    timeout := time.Duration(1 * time.Second)
+    client := http.Client{
+        Timeout: timeout,
+    }
+    client.Get(URL)
     if err != nil{
         log.Print(err)
         return false
@@ -49,6 +56,5 @@ func SendPulse(node structs.NodeInfo) bool{
     if resp.StatusCode != 200 {
         return false
     }
-    log.Print(resp)
     return true
 }
