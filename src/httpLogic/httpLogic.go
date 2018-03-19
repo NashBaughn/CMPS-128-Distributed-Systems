@@ -122,6 +122,7 @@ func NotifyNodes(self structs.NodeInfo, viewForm structs.ViewUpdateForm, view []
 func CreatePartitionRequests(view [][]structs.NodeInfo,
 	requestMap map[int]*kvsAccess.KeyValStore) []*http.Request {
 
+	log.Print("CreatePartitionRequests")
 	var requestStore []*http.Request
 	for ind, v := range requestMap {
 		form := url.Values{}
