@@ -300,10 +300,12 @@ func SendViewUpdate(w http.ResponseWriter, r *http.Request) {
 // Internal endpoint for handling View Update
 func PartitionHandler(w http.ResponseWriter, r *http.Request) {
 	// parse request and get relevant info (key, value, view_update, type, ip_port)
+	log.Print("In Partition Handler")
 	postForm := httpLogic.ViewUpdateForm(r)
 	w.WriteHeader(200)
 	w.Header().Set("Content-Type", "application/json")
 	if postForm.Type == "add" {
+		log.Print("Adding new Node:" + postForm.Ip)
 		// update view
 		var respBody structs.AddNodeResp
 		for i, part := range _view {
@@ -314,6 +316,7 @@ func PartitionHandler(w http.ResponseWriter, r *http.Request) {
 			if (i+1 == len(_view)) {
 				new_part := []structs.NodeInfo{structs.NodeInfo{postForm.Ip, postForm.Port, i+1, true}}
 				_view = append(_view, new_part)
+				log.Print("Sending Repartition")
 				sendRepartition()
 			}
 		}
@@ -323,21 +326,26 @@ func PartitionHandler(w http.ResponseWriter, r *http.Request) {
 		bodyBytes, _ := json.Marshal(respBody)
 		w.Write(bodyBytes)
 	} else {
+		log.Print("Removing Node:" + postForm.Ip)
 		// update view
 		partIndex, nodeIndex := findPartition(postForm.Ip)
 		ErrPanicStr(partIndex != -1, "ip does not exist!: "+postForm.Ip)
 		removeView(partIndex, nodeIndex)
 		if (len(_view[partIndex]) == 0) {
+			log.Print("Sending Repartition")
 			sendRepartition()
 		}
 		respBody := structs.RemoveNodeResp{"success", len(_view)}
 		bodyBytes, _ := json.Marshal(respBody)
 		w.Write(bodyBytes)
 	}
+	log.Print("New View:" + _view)
+	log.Print("Leaving Partition Handler")
 }
 
 // repartition all keys in kvs and sends to new partition
 func sendRepartition() {
+	log.Print("In Send Repartition")
 	requestMap := partition.Repartition(_my_node.Id, _view, _KVS)
 	// Only send requests if the first alive node in partition
 	Head := findLiving(_my_node.Id)
@@ -352,11 +360,12 @@ func sendRepartition() {
 			ErrPanic(err)
 		}
 	}
+	log.Print("Leaving Send Repartition")
 }
 
 // Internal endpoint for handling repartition request and kvs manipulations
 func RepartitionHandler(w http.ResponseWriter, r *http.Request) {
-	log.Print("repartitionHandler")
+	log.Print("In Repartition Handler")
 	partForm := httpLogic.PartitionForm(r)
 	// kvs storage
 	for key, val := range partForm {
