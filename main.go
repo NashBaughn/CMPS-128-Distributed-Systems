@@ -33,7 +33,7 @@ func main() {
   router.HandleFunc("/repartition", mainInstance.RepartitionHandler).Methods("PUT")
   router.HandleFunc("/partition", mainInstance.PartitionHandler).Methods("PUT")
   router.HandleFunc("/viewchange", mainInstance.AddNode).Methods("PUT")
-  router.HandleFunc("/KVSmend", mainInstance.HandleKVSMend).Methods("PUT")
+  router.HandleFunc("/KVSMend", mainInstance.HandleKVSMend).Methods("PUT")
   router.HandleFunc("/heartbeat", mainInstance.HBresponse).Methods("GET")
   router.HandleFunc("/sendKeyVal", mainInstance.SendKeyVal).Methods("PUT")
 

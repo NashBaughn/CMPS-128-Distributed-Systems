@@ -6,59 +6,58 @@ import (
     "log"
     "mainInstance"
     "structs"
+    "strings"
 )
 
 
 func Start() {
+    log.Print("Starting Heart Monitor")
     for {
         time.Sleep(100 * time.Millisecond) // 500 ms for production
         //log.Print("HeartBeat")
         view := mainInstance.GetView()
-        curr := mainInstance.GetNode()
+        currNode := mainInstance.GetNode()
         //log.Print(curr.Ip)
-        //log.Print(view)
-        CheckNodes(view, curr.Ip)
+        //mainInstance.PrintView()
+        CheckNodes(view, currNode)
     }
 }
 
-func CheckNodes(view [][]structs.NodeInfo, Ip string) {
+func CheckNodes(view [][]structs.NodeInfo, currNode structs.NodeInfo) {
     for i, row := range view {
         for j, node := range row {
-            if (Ip != node.Ip){
+            if (currNode.Ip != node.Ip){
                 if(!SendPulse(node)){
                     log.Print("Dead node: "+node.Ip)
                     view[i][j].Alive = false
                 } else {
                     if(node.Alive == false){
                         log.Print("Resurrected node: "+node.Ip)
-                        mainInstance.SendKVSMend(node)
+                        if (currNode.Id == node.Id) {
+                            mainInstance.SendKVSMend(node)
+                        }
                         view[i][j].Alive = true
                     }
                 }
             }
-
         }
     }
 }
 
 func SendPulse(node structs.NodeInfo) bool{
     URL := "http://" + node.Ip + ":" + node.Port + "/heartbeat"
-    //log.Print(URL)
-    resp, err := http.Get(URL)
+    // Request Creation
+    req, _ := http.NewRequest(http.MethodGet, URL, strings.NewReader(""))
+    req.Header.Add("Content-Type", "application/x-www-form-urlencoded")
+    // Request sending logic
+    client := &http.Client{
+        Timeout: 500 * time.Millisecond,
+    }
+    resp, err := client.Do(req)
     if err != nil{
         log.Print(err)
         return false
     }
-    timeout := time.Duration(1 * time.Second)
-    client := http.Client{
-        Timeout: timeout,
-    }
-    _, err = client.Get(URL)
-    if err != nil{
-        log.Print(err)
-        return false
-    }
-    defer resp.Body.Close()
     if resp.StatusCode != 200 {
         return false
     }

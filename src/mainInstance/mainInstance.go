@@ -37,8 +37,8 @@ func Start() {
 	_view = viewToStruct(os.Getenv("VIEW"))
 	PrintView()
 
-	for i, _ := range(_view) {
-		_causal_Payload = append(_causal_Payload, i)
+	for _, _ = range _view {
+		_causal_Payload = append(_causal_Payload, 0)
 	}
 
 	log.Print("_my_node:")
@@ -197,10 +197,10 @@ func findLiving(ind int) structs.NodeInfo {
 }
 
 // Finds all living nodes in partition
-func findAllLiving(ind int) []structs.NodeInfo {
+func findAllLiving(node structs.NodeInfo) []structs.NodeInfo {
 	var Alive []structs.NodeInfo
-	for _, Head := range _view[ind] {
-		if (Head.Alive == true) {
+	for _, Head := range _view[node.Id] {
+		if (Head.Alive == true && Head != node) {
 			Alive = append(Alive, Head)
 		}
 	}
@@ -237,6 +237,8 @@ func removeView(i int, j int) {
 }
 
 func SendKVSMend (Node structs.NodeInfo) {
+	log.Print("In Send KVS Mend")
+	log.Print("Sending new KVS to: " + Node.Ip)
     Ip := Node.Ip
 	Port := Node.Port
 	URL := "http://" + Ip + ":" + Port + "/KVSMend"
@@ -245,8 +247,8 @@ func SendKVSMend (Node structs.NodeInfo) {
 		form.Add("Key", key)
 		form.Add("Val", val)
 	}
-    for _, val := range GetPayload() {
-        form.Add("Payload", string(val))
+    for _, val := range _causal_Payload {
+        form.Add("Payload", strconv.Itoa(val))
     }
 	formJSON := form.Encode()
 	req, _ := http.NewRequest(http.MethodPut, URL, strings.NewReader(formJSON))
@@ -261,27 +263,29 @@ func SendKVSMend (Node structs.NodeInfo) {
 // Retrieves new KVS from other node in partition
 // Checks the Causal Payload to see if it is newer than current one
 func HandleKVSMend (w http.ResponseWriter, r *http.Request) {
+	log.Print("In Handle KVS Mend")
     r.ParseForm()
+	newer := true
     Payload := r.PostForm["Payload"]
-    newer := true
-    var newPayload []int
-    for ind, my_num := range GetPayload() {
+    //var newPayload []int
+    for ind, my_num := range _causal_Payload {
         new_num,_  := strconv.Atoi(Payload[ind])
         if my_num > new_num {
+			log.Print("Older KVS")
             newer = false
             break
         }
-        newPayload[ind] = new_num
+        //newPayload[ind] = new_num
     }
     if newer {
-        newKVS := kvsAccess.NewKVS()
+        _KVS = kvsAccess.NewKVS()
 		keys := r.PostForm["Key"]
 		vals := r.PostForm["Val"]
         for i, key := range keys {
-            newKVS.SetValue(key, vals[i])
+			log.Print("Adding Key: "+key + " Value: " + vals[i])
+            _KVS.SetValue(key, vals[i])
         }
-        SetKVS(newKVS)
-        SetPayload(newPayload)
+        //SetPayload(newPayload)
     }
     respBody := structs.PartitionResp{"success"}
     bodyBytes, _ := json.Marshal(respBody)
@@ -322,7 +326,7 @@ func HBresponse(w http.ResponseWriter, r *http.Request) {
 		ErrPanic(err)
     // maybe include view and/or casual order
 
-    w.WriteHeader(200)
+    //w.WriteHeader(200)
     w.Write(jsonResponse)
 }
 
@@ -516,8 +520,6 @@ func sendUpdate(update structs.ViewUpdateForm) {
 	req.Header.Add("Content-Type", "application/x-www-form-urlencoded")
 	client := &http.Client{}
 	_, err := client.Do(req)
-
-	log.Print("Trying to send the goodz")
 	ErrPanic(err)
 	log.Print("I sent the goodz")
 }
@@ -557,7 +559,6 @@ func AddNode(w http.ResponseWriter, r *http.Request) {
 	w.Write(bodyBytes)
 	log.Print("View after adding myself")
 	PrintView()
-	log.Print("Succesfully recieved the goodz")
 }
 
 func SendKeyVal(w http.ResponseWriter, r *http.Request) {
@@ -566,6 +567,7 @@ func SendKeyVal(w http.ResponseWriter, r *http.Request) {
 	Key := r.FormValue("key")
 	Value := r.FormValue("val")
 	log.Print("Key: " +Key + ", Val: " + Value)
+	_causal_Payload[_my_node.Id]++
 	//causal_payload := r.PostForm["causal_payload"]
 	// do relevant kvs ops
 	resp := _KVS.SetValue(Key, Value)
@@ -634,7 +636,8 @@ func NewSet(w http.ResponseWriter, r *http.Request) {
 		} else {
 			log.Print("Current View:")
 			PrintView()
-			living := findAllLiving(_my_node.Id)
+			_causal_Payload[_my_node.Id]++
+			living := findAllLiving(_my_node)
 
 			for _, node := range living {
 				URL := "http://" + node.Ip + ":" + node.Port + "/sendKeyVal"
@@ -652,7 +655,7 @@ func NewSet(w http.ResponseWriter, r *http.Request) {
 				client := &http.Client{
 					Timeout: time.Second,
 				}
-				_, err = client.Do(req)
+				_, err := client.Do(req)
 				ErrPanic(err)
 			}
 
@@ -670,11 +673,9 @@ func NewSet(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		// respond
-		log.Print("Sending Response")
 		jsonResponse, err := json.Marshal(put)
 		ErrPanic(err)
 		w.Write(jsonResponse)
-		log.Print("Response Sent")
 		return
 	}
 	// Not Mine
@@ -706,7 +707,9 @@ func NewGet(w http.ResponseWriter, r *http.Request) {
 			getError := structs.ERROR{"key is empty", "keyError"}
 			jsonResponse, err = json.Marshal(getError)
 		}
+		log.Print("Key:" + key[0])
 		resp := _KVS.GetValue(key[0])
+		log.Print("Value:" + resp)
 		if resp == "" {
 			w.WriteHeader(404)
 			getError := structs.ERROR{"error", "key does not exist"}
