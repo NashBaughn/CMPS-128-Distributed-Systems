@@ -208,22 +208,23 @@ func findAllLiving(node structs.NodeInfo) []structs.NodeInfo {
 }
 
 // removes an element from _view
-func removeView(i int, j int) bool {
+func removeView(i int, j int) bool{
 	log.Print("In Remove View, removing:")
-	need2shift := false
+	shift := false
+	//var OldNode structs.NodeInfo
 	Part := _view[i]
 	log.Print(Part[j])
 	if (len(Part) - 1) == j {
-	 	Part = Part[:j]
+	 	_view[i] = Part[:j]
 	} else {
- 		Part = append(Part[:j], Part[j+1:]...)
+ 		_view[i] = append(Part[:j], Part[j+1:]...)
 	}
 	if (i != len(_view)-1) {
 		OldPart := _view[len(_view)-1]
 		//log.Print(OldPart)
 		OldNode := OldPart[len(OldPart)-1]
 		OldNode.Id = i
-		Part = append(Part, OldNode)
+		_view[i] = append(_view[i], OldNode)
 		if (_my_node.Ip == OldNode.Ip) {
 			_causal_Payload[_my_node.Id] = 0
 			_my_node.Id = i
@@ -231,21 +232,21 @@ func removeView(i int, j int) bool {
 			SendKVSMend(OldNode)
 		}
 		if (len(OldPart) == 1){
-			need2shift = true
 			_view = _view[:len(_view)-1]
-			_causal_Payload = _causal_Payload[:len(_causal_Payload)-1]
+			//_causal_Payload = _causal_Payload[:len(_causal_Payload)-1]
+			shift = true
 		}else {
 			_view[len(_view)-1] = OldPart[:len(OldPart)-1]
 		}
 		//log.Print(_view[len(_view)-1])
 	} else {
-		if (len(Part) == 0){
-			need2shift = true
+		if (len(_view[i]) == 0){
 			_view = _view[:len(_view)-1]
-			_causal_Payload = _causal_Payload[:len(_causal_Payload)-1]
+			//_causal_Payload = _causal_Payload[:len(_causal_Payload)-1]
+			shift = true
 		}
 	}
-	return need2shift
+	return shift
 }
 
 func SendKVSMend (Node structs.NodeInfo) {
@@ -259,8 +260,8 @@ func SendKVSMend (Node structs.NodeInfo) {
 		form.Add("Key", key)
 		form.Add("Val", val)
 	}
-    for _, val := range _causal_Payload {
-        form.Add("Payload", strconv.Itoa(val))
+    for _, num := range _causal_Payload {
+        form.Add("Payload", strconv.Itoa(num))
     }
 	formJSON := form.Encode()
 	req, _ := http.NewRequest(http.MethodPut, URL, strings.NewReader(formJSON))
@@ -280,9 +281,12 @@ func HandleKVSMend (w http.ResponseWriter, r *http.Request) {
 	newer := true
     Payload := r.PostForm["Payload"]
     var newPayload []int
-    for ind, new_str := range Payload {
-        new_num, _  := strconv.Atoi(new_str)
-        if (new_num < _causal_Payload[ind]) {
+	log.Print("Length of my Payload: "+strconv.Itoa(len(_causal_Payload))+" Length of new Payload: "+strconv.Itoa(len(Payload)))
+    for ind, my_num := range _causal_Payload {
+		log.Print("Index: "+strconv.Itoa(ind))
+        new_num, _  := strconv.Atoi(Payload[ind])
+		log.Print("Num: "+Payload[ind])
+        if (my_num > new_num) {
 			log.Print("Older KVS")
             newer = false
             break
@@ -338,6 +342,17 @@ func HBresponse(w http.ResponseWriter, r *http.Request) {
 		ErrPanic(err)
     // maybe include view and/or casual order
 
+    //w.WriteHeader(200)
+    w.Write(jsonResponse)
+}
+
+func HelpMe(w http.ResponseWriter, r *http.Request) {
+    ok := structs.PartitionResp{"success"}
+    jsonResponse, err := json.Marshal(ok)
+	ErrPanic(err)
+	Part := _view[_my_node.Id]
+	SendKVSMend(Part[len(Part)-1])
+    // maybe include view and/or casual order
     //w.WriteHeader(200)
     w.Write(jsonResponse)
 }
@@ -440,6 +455,7 @@ func PartitionHandler(w http.ResponseWriter, r *http.Request) {
 				_view = append(_view, new_part)
 				log.Print("Sending Repartition")
 				sendRepartition()
+				_causal_Payload = append(_causal_Payload,0)
 			}
 		}
 		log.Print("view after add:")
@@ -456,11 +472,16 @@ func PartitionHandler(w http.ResponseWriter, r *http.Request) {
 		PrintView()
 		partIndex, nodeIndex := findPartition(postForm.Ip)
 		ErrPanicStr(partIndex != -1, "ip does not exist!: "+postForm.Ip)
-		shift := removeView(partIndex, nodeIndex)
-		if shift {
-			log.Print("Sending Repartition")
+		if removeView(partIndex, nodeIndex) {
 			sendRepartition()
+			_causal_Payload = _causal_Payload[:len(_causal_Payload)-1]
 		}
+		/*if (shift && node.Ip == _my_node.Ip){
+			for _, friend := range _view[node.Id] {
+				http.Get("http://" + friend.Ip + ":" + friend.Port + "/helpMe")
+			}
+			_my_node.Id = node.Id
+		}*/
 		log.Print("view after remove:")
 		PrintView()
 		respBody := structs.RemoveNodeResp{"success", len(_view)}
@@ -558,6 +579,9 @@ func AddNode(w http.ResponseWriter, r *http.Request) {
 	_K,_ = strconv.Atoi(K)*/
 	log.Print("My K:" + strconv.Itoa(_K))
 	_view = make([][]structs.NodeInfo, int(math.Ceil(float64(len(Ip))/float64(_K))))
+	for _, _ = range _view {
+		_causal_Payload = append(_causal_Payload, 0)
+	}
 	log.Print("Length of View:" + string(len(_view)))
 	for i, P := range Ip {
 		log.Print("Ip: "+Ip[i])

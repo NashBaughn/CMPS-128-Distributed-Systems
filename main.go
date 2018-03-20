@@ -36,7 +36,7 @@ func main() {
   router.HandleFunc("/KVSMend", mainInstance.HandleKVSMend).Methods("PUT")
   router.HandleFunc("/heartbeat", mainInstance.HBresponse).Methods("GET")
   router.HandleFunc("/sendKeyVal", mainInstance.SendKeyVal).Methods("PUT")
-  //router.HandleFunc("/clearOut", mainInstance.ClearOut).Methods("GET")
+  router.HandleFunc("/helpMe", mainInstance.HelpMe).Methods("GET")
 
 
   // listen on port 8080

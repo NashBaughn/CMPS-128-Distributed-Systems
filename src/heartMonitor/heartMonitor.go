@@ -51,7 +51,7 @@ func SendPulse(node structs.NodeInfo) bool{
     req.Header.Add("Content-Type", "application/x-www-form-urlencoded")
     // Request sending logic
     client := &http.Client{
-        Timeout: time.Second,
+        Timeout: 500 * time.Millisecond,
     }
     _, err := client.Do(req)
     if err != nil{
