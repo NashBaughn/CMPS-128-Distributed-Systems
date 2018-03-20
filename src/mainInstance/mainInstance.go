@@ -22,6 +22,8 @@ import (
 
 var _KVS *kvsAccess.KeyValStore
 var _my_node structs.NodeInfo
+var _mend_needed bool
+var _mend_KVS *kvsAccess.KeyValStore
 var _view [][]structs.NodeInfo
 var _K int
 var _causal_Payload []int
@@ -36,6 +38,7 @@ func Start() {
 	log.Print("view: "+os.Getenv("VIEW"))
 	_view = viewToStruct(os.Getenv("VIEW"))
 	PrintView()
+	_mend_needed = false
 
 	for _, _ = range _view {
 		_causal_Payload = append(_causal_Payload, 0)
@@ -250,9 +253,12 @@ func removeView(i int, j int) bool{
 }
 
 func SendKVSMend (Node structs.NodeInfo) {
-	log.Print("In Send KVS Mend")
+	log.Print("In Send KVS Mend: "+time.Now().String())
 	log.Print("Sending new KVS to: " + Node.Ip)
-    Ip := Node.Ip
+	// log.Print("starting timeout: "+time.Now().String())
+	// time.Sleep(50 * time.Millisecond)
+	// log.Print("ending timeout: "+time.Now().String())
+  Ip := Node.Ip
 	Port := Node.Port
 	URL := "http://" + Ip + ":" + Port + "/KVSMend"
 	form := url.Values{}
@@ -260,15 +266,16 @@ func SendKVSMend (Node structs.NodeInfo) {
 		form.Add("Key", key)
 		form.Add("Val", val)
 	}
-    for _, num := range _causal_Payload {
-        form.Add("Payload", strconv.Itoa(num))
-    }
+	form.Add("sender", _my_node.Ip)
+  for _, num := range _causal_Payload {
+    form.Add("Payload", strconv.Itoa(num))
+  }
 	formJSON := form.Encode()
 	req, _ := http.NewRequest(http.MethodPut, URL, strings.NewReader(formJSON))
 	req.Header.Add("Content-Type", "application/x-www-form-urlencoded")
 	client := &http.Client{}
 	_, err := client.Do(req)
-    if err != nil {
+  if err != nil {
 		panic(err)
 	}
 }
@@ -276,37 +283,49 @@ func SendKVSMend (Node structs.NodeInfo) {
 // Retrieves new KVS from other node in partition
 // Checks the Causal Payload to see if it is newer than current one
 func HandleKVSMend (w http.ResponseWriter, r *http.Request) {
-	log.Print("In Handle KVS Mend")
-    r.ParseForm()
+	r.ParseForm()
+	log.Print("In Handle KVS Mend: "+time.Now().String())
+	log.Print("requestings host: "+r.PostForm["sender"][0])
+	PrintView()
+	// log.Print("starting wait: "+time.Now().String())
+	// time.Sleep(400 * time.Millisecond)
+	// log.Print("ending wait: "+time.Now().String())
 	newer := true
-    Payload := r.PostForm["Payload"]
-    var newPayload []int
+  Payload := r.PostForm["Payload"]
+  var newPayload []int
 	log.Print("Length of my Payload: "+strconv.Itoa(len(_causal_Payload))+" Length of new Payload: "+strconv.Itoa(len(Payload)))
-    for ind, my_num := range _causal_Payload {
+  for ind, my_num := range _causal_Payload {
 		log.Print("Index: "+strconv.Itoa(ind))
-        new_num, _  := strconv.Atoi(Payload[ind])
-		log.Print("Num: "+Payload[ind])
-        if (my_num > new_num) {
+    new_num, _  := strconv.Atoi(Payload[ind])
+		log.Print("Their Payload: "+Payload[ind])
+		log.Print("My Payload: "+strconv.Itoa(_causal_Payload[ind]))
+    if (my_num < new_num) && _my_node.Id == ind{
 			log.Print("Older KVS")
-            newer = false
-            break
-        }
-        newPayload = append(newPayload,new_num)
+      newer = false
+      break
     }
-    if newer {
-        _KVS = kvsAccess.NewKVS()
+    newPayload = append(newPayload,new_num)
+  }
+  if newer {
+	  new_kvs := kvsAccess.NewKVS()
 		keys := r.PostForm["Key"]
 		vals := r.PostForm["Val"]
-        for i, key := range keys {
-			log.Print("Adding Key: "+key + " Value: " + vals[i])
-            _KVS.SetValue(key, vals[i])
-        }
-        _causal_Payload = newPayload
-    }
-    respBody := structs.PartitionResp{"success"}
-    bodyBytes, _ := json.Marshal(respBody)
-    w.WriteHeader(200)
-    w.Write(bodyBytes)
+		for i, key := range keys {
+			new_kvs.SetValue(key, vals[i])
+		}
+		if len(_view[_my_node.Id]) != 1 {
+			log.Print("rewriting KVS: "+time.Now().String())
+			_KVS = new_kvs
+	   	_causal_Payload = newPayload
+	 } else {
+		 _mend_needed = true
+		 _mend_KVS = new_kvs
+	 }
+  }
+  respBody := structs.PartitionResp{"success"}
+  bodyBytes, _ := json.Marshal(respBody)
+  w.WriteHeader(200)
+  w.Write(bodyBytes)
 }
 
 // because a lot of error checking occurs
@@ -322,6 +341,8 @@ func ErrPanicStr(cond bool, err string) {
 }
 func PrintView() {
 	log.Print("------------------------------------")
+	log.Print("_my_node: ")
+	log.Print(_my_node)
 	log.Print("num of partitions: "+strconv.Itoa(len(_view)))
 	for i, part := range(_view) {
 		log.Print("partition "+strconv.Itoa(i)+":")
@@ -347,6 +368,7 @@ func HBresponse(w http.ResponseWriter, r *http.Request) {
 }
 
 func HelpMe(w http.ResponseWriter, r *http.Request) {
+	log.Print("HelpMe")
     ok := structs.PartitionResp{"success"}
     jsonResponse, err := json.Marshal(ok)
 	ErrPanic(err)
@@ -406,7 +428,7 @@ func GetPartitionMembers(w http.ResponseWriter, r *http.Request) {
 
 // PUT Handler for sending view updates
 func SendViewUpdate(w http.ResponseWriter, r *http.Request) {
-	log.Print("SendViewUpdate")
+	log.Print("SendViewUpdate: "+time.Now().String())
 	// parse request and get relevant info (key, value, view_update, type, ip_port)
 	postForm := httpLogic.ViewUpdateForm(r)
 	// notify all nodes
@@ -429,7 +451,7 @@ func SendViewUpdate(w http.ResponseWriter, r *http.Request) {
 
 // Internal endpoint for handling View Update
 func PartitionHandler(w http.ResponseWriter, r *http.Request) {
-	log.Print("PartitionHandler")
+	log.Print("PartitionHandler: "+time.Now().String())
 	// parse request and get relevant info (key, value, view_update, type, ip_port)
 	log.Print("In Partition Handler")
 	postForm := httpLogic.ViewUpdateForm(r)
@@ -516,15 +538,21 @@ func sendRepartition() {
 
 // Internal endpoint for handling repartition request and kvs manipulations
 func RepartitionHandler(w http.ResponseWriter, r *http.Request) {
-	log.Print("In Repartition Handler")
+	log.Print("In Repartition Handler: "+time.Now().String())
 	partForm := httpLogic.PartitionForm(r)
 	// kvs storage
 	log.Print("Num Keys before adding: "+strconv.Itoa(_KVS.NumKeys()))
 	for key, val := range partForm {
-		log.Print("key: " + key + " value: " + val + " STORED!")
+		log.Print("key: " + key + " value: " + val + " STORED! "+time.Now().String())
 		_KVS.SetValue(key, val)
 	}
 	log.Print("Num Keys after adding: "+strconv.Itoa(_KVS.NumKeys()))
+	if _mend_needed {
+		log.Print("mending")
+		_KVS = _mend_KVS
+		_mend_needed = false
+		log.Print("Num Keys after mending: "+strconv.Itoa(_KVS.NumKeys()))
+	}
 	// respond with status
 	respBody := structs.PartitionResp{"success"}
 	bodyBytes, _ := json.Marshal(respBody)

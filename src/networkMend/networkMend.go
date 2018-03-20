@@ -17,6 +17,7 @@ import (
 // update: first letter of function to upper case
 // purpose: now it can be exported
 func SendNetworkMend (Node structs.NodeInfo) {
+  log.Print("SendNetworkMend")
     Ip := Node.Ip
 	Port := Node.Port
 	URL := "http://" + Ip + ":" + Port + "/networkMend"

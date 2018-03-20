@@ -2,11 +2,11 @@ package partition
 
 import (
 	"structs"
-	// "log"
+	"log"
 	// "crypto/sha256"
 	// "encoding/binary"
 	"hash/fnv"
-	// "strconv"
+	"strconv"
 	// "math"
 	"kvsAccess"
 )
@@ -39,16 +39,27 @@ func _hash(key string, view [][]structs.NodeInfo) int {
 	return partitions[index]
 }
 
+func PrintRequestMap(reqMap map[int]*kvsAccess.KeyValStore) {
+	log.Print("RequestMap:")
+	for i, kvs := range(reqMap) {
+		log.Print(strconv.Itoa(i)+"st partition: ")
+		for k, v := range kvs.Store {
+			log.Print("key: "+k+" value: "+v)
+		}
+	}
+}
+
 // main repartitioning Logic
 // Generates map from IpPort to kvs.
 func Repartition(index int, view [][]structs.NodeInfo, kvs *kvsAccess.KeyValStore) map[int]*kvsAccess.KeyValStore {
+	log.Print("Repartition")
 	// requestMap initialization
 	// requestMap contains a mapping of keys to their correct partition #
 	requestMap := make(map[int]*kvsAccess.KeyValStore)
     for i, part := range view {
-        if (i != index && len(part) != 0) {
-			requestMap[i] = kvsAccess.NewKVS()
-		}
+      if (i != index && len(part) != 0) {
+				requestMap[i] = kvsAccess.NewKVS()
+			}
 		/*for _, Head := range part {
 			if Head.Alive != false {
 				requestMap[Head.Ip+":"+Head.Port] = kvsAccess.NewKVS()
@@ -63,5 +74,6 @@ func Repartition(index int, view [][]structs.NodeInfo, kvs *kvsAccess.KeyValStor
 			requestMap[viewIndex].SetValue(k, v)
 		}
 	}
+	PrintRequestMap(requestMap)
 	return requestMap
 }
