@@ -208,32 +208,44 @@ func findAllLiving(node structs.NodeInfo) []structs.NodeInfo {
 }
 
 // removes an element from _view
-func removeView(i int, j int) {
-	//log.Print("In Remove View, removing:")
+func removeView(i int, j int) bool {
+	log.Print("In Remove View, removing:")
+	need2shift := false
 	Part := _view[i]
-	//log.Print(Part[j])
+	log.Print(Part[j])
 	if (len(Part) - 1) == j {
 	 	Part = Part[:j]
 	} else {
  		Part = append(Part[:j], Part[j+1:]...)
 	}
-	//log.Print("Changing old partition from:")
-	OldPart := _view[len(_view)-1]
-	//log.Print(OldPart)
-	OldNode := OldPart[len(OldPart)-1]
-	OldNode.Id = i
-	if (len(OldPart) == 1){
-		_view = _view[:len(_view)-1]
-	}else {
-		_view[len(_view)-1] = OldPart[:len(OldPart)-1]
+	if (i != len(_view)-1) {
+		OldPart := _view[len(_view)-1]
+		//log.Print(OldPart)
+		OldNode := OldPart[len(OldPart)-1]
+		OldNode.Id = i
+		if (len(OldPart) == 1){
+			need2shift = true
+			_view = _view[:len(_view)-1]
+			_causal_Payload = _causal_Payload[:len(_causal_Payload)-1]
+		}else {
+			_view[len(_view)-1] = OldPart[:len(OldPart)-1]
+		}
+		//log.Print(_view[len(_view)-1])
+		Part = append(Part, OldNode)
+		if (_my_node.Ip == OldNode.Ip) {
+			_causal_Payload[_my_node.Id] = 0
+			_my_node.Id = i
+		} else if (_my_node.Id == i){
+			SendKVSMend(OldNode)
+		}
+	} else {
+		if (len(Part) == 0){
+			need2shift = true
+			_view = _view[:len(_view)-1]
+			_causal_Payload = _causal_Payload[:len(_causal_Payload)-1]
+		}
 	}
-	//log.Print("To:")
-	//log.Print(OldPart)
-	Part = append(Part, OldNode)
-	if (_my_node.Id == i){
-		SendKVSMend(OldNode)
-	}
-
+	return need2shift
 }
 
 func SendKVSMend (Node structs.NodeInfo) {
@@ -267,15 +279,15 @@ func HandleKVSMend (w http.ResponseWriter, r *http.Request) {
     r.ParseForm()
 	newer := true
     Payload := r.PostForm["Payload"]
-    //var newPayload []int
-    for ind, my_num := range _causal_Payload {
-        new_num,_  := strconv.Atoi(Payload[ind])
-        if my_num > new_num {
+    var newPayload []int
+    for ind, new_str := range Payload {
+        new_num, _  := strconv.Atoi(new_str)
+        if (new_num < _causal_Payload[ind]) {
 			log.Print("Older KVS")
             newer = false
             break
         }
-        //newPayload[ind] = new_num
+        newPayload = append(newPayload, new_num)
     }
     if newer {
         _KVS = kvsAccess.NewKVS()
@@ -285,7 +297,7 @@ func HandleKVSMend (w http.ResponseWriter, r *http.Request) {
 			log.Print("Adding Key: "+key + " Value: " + vals[i])
             _KVS.SetValue(key, vals[i])
         }
-        //SetPayload(newPayload)
+        _causal_Payload = newPayload
     }
     respBody := structs.PartitionResp{"success"}
     bodyBytes, _ := json.Marshal(respBody)
@@ -416,7 +428,11 @@ func PartitionHandler(w http.ResponseWriter, r *http.Request) {
 		var respBody structs.AddNodeResp
 		for i, part := range _view {
 			if (len(part) < _K) {
+				newNode:= structs.NodeInfo{postForm.Ip, postForm.Port, i, true}
 				_view[i] = append(part, structs.NodeInfo{postForm.Ip, postForm.Port, i, true})
+				if (_my_node.Id == i){
+					SendKVSMend(newNode)
+				}
 				break
 			}
 			if (i+1 == len(_view)) {
@@ -440,8 +456,8 @@ func PartitionHandler(w http.ResponseWriter, r *http.Request) {
 		PrintView()
 		partIndex, nodeIndex := findPartition(postForm.Ip)
 		ErrPanicStr(partIndex != -1, "ip does not exist!: "+postForm.Ip)
-		removeView(partIndex, nodeIndex)
-		if (len(_view[partIndex]) == 0) {
+		shift := removeView(partIndex, nodeIndex)
+		if shift {
 			log.Print("Sending Repartition")
 			sendRepartition()
 		}

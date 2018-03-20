@@ -27,7 +27,7 @@ func CheckNodes(view [][]structs.NodeInfo, currNode structs.NodeInfo) {
     for i, row := range view {
         for j, node := range row {
             if (currNode.Ip != node.Ip){
-                if(!SendPulse(node)){
+                if(!SendPulse(node)) {
                     log.Print("Dead node: "+node.Ip)
                     view[i][j].Alive = false
                 } else {
@@ -51,15 +51,15 @@ func SendPulse(node structs.NodeInfo) bool{
     req.Header.Add("Content-Type", "application/x-www-form-urlencoded")
     // Request sending logic
     client := &http.Client{
-        Timeout: 500 * time.Millisecond,
+        Timeout: time.Second,
     }
-    resp, err := client.Do(req)
+    _, err := client.Do(req)
     if err != nil{
         log.Print(err)
         return false
     }
-    if resp.StatusCode != 200 {
+    /*if resp.StatusCode != 200 {
         return false
-    }
+    }*/
     return true
 }
