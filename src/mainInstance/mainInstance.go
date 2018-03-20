@@ -223,6 +223,13 @@ func removeView(i int, j int) bool {
 		//log.Print(OldPart)
 		OldNode := OldPart[len(OldPart)-1]
 		OldNode.Id = i
+		Part = append(Part, OldNode)
+		if (_my_node.Ip == OldNode.Ip) {
+			_causal_Payload[_my_node.Id] = 0
+			_my_node.Id = i
+		} else if (_my_node.Id == i){
+			SendKVSMend(OldNode)
+		}
 		if (len(OldPart) == 1){
 			need2shift = true
 			_view = _view[:len(_view)-1]
@@ -231,13 +238,6 @@ func removeView(i int, j int) bool {
 			_view[len(_view)-1] = OldPart[:len(OldPart)-1]
 		}
 		//log.Print(_view[len(_view)-1])
-		Part = append(Part, OldNode)
-		if (_my_node.Ip == OldNode.Ip) {
-			_causal_Payload[_my_node.Id] = 0
-			_my_node.Id = i
-		} else if (_my_node.Id == i){
-			SendKVSMend(OldNode)
-		}
 	} else {
 		if (len(Part) == 0){
 			need2shift = true
@@ -287,7 +287,7 @@ func HandleKVSMend (w http.ResponseWriter, r *http.Request) {
             newer = false
             break
         }
-        newPayload = append(newPayload, new_num)
+        newPayload = append(newPayload,new_num)
     }
     if newer {
         _KVS = kvsAccess.NewKVS()
@@ -474,7 +474,9 @@ func PartitionHandler(w http.ResponseWriter, r *http.Request) {
 // repartition all keys in kvs and sends to new partition
 func sendRepartition() {
 	log.Print("In Send Repartition")
+	log.Print("Num Keys before removing: "+strconv.Itoa(_KVS.NumKeys()))
 	requestMap := partition.Repartition(_my_node.Id, _view, _KVS)
+	log.Print("Num Keys adter removing: "+strconv.Itoa(_KVS.NumKeys()))
 	// Only send requests if the first alive node in partition
 	Head := findLiving(_my_node.Id)
 	if _my_node == Head {
@@ -496,10 +498,12 @@ func RepartitionHandler(w http.ResponseWriter, r *http.Request) {
 	log.Print("In Repartition Handler")
 	partForm := httpLogic.PartitionForm(r)
 	// kvs storage
+	log.Print("Num Keys before adding: "+strconv.Itoa(_KVS.NumKeys()))
 	for key, val := range partForm {
 		log.Print("key: " + key + " value: " + val + " STORED!")
 		_KVS.SetValue(key, val)
 	}
+	log.Print("Num Keys after adding: "+strconv.Itoa(_KVS.NumKeys()))
 	// respond with status
 	respBody := structs.PartitionResp{"success"}
 	bodyBytes, _ := json.Marshal(respBody)
