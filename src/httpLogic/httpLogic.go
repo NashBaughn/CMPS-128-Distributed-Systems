@@ -88,30 +88,30 @@ func NotifyNodes(self structs.NodeInfo, viewForm structs.ViewUpdateForm, view []
 
 	for _, part := range view {
         for _, node := range part {
-			if (node.Alive == true) {
-	    		tempIp := node.Ip
-	    		tempPort := node.Port
-	    		if self.Ip != tempIp {
-	    			URL := "http://" + tempIp + ":" + tempPort + "/partition"
+					if (node.Alive == true) {
+		    		tempIp := node.Ip
+		    		tempPort := node.Port
+		    		if self.Ip != tempIp {
+		    			URL := "http://" + tempIp + ":" + tempPort + "/partition"
 
-	    			// var formData = []kv {
-	    			//   kv { key  : "ip_port", value: viewForm.Ip+":"+viewForm.Port, },
-	    			//   kv { key  : "type", value: viewForm.Type, },
-	    			// }
-	    			// var header = kv { key  :"Content-Type", value:"application/x-www-form-urlencoded", }
-	    			// var req = CustomRequest("PUT", header, URL, formData)
+		    			// var formData = []kv {
+		    			//   kv { key  : "ip_port", value: viewForm.Ip+":"+viewForm.Port, },
+		    			//   kv { key  : "type", value: viewForm.Type, },
+		    			// }
+		    			// var header = kv { key  :"Content-Type", value:"application/x-www-form-urlencoded", }
+		    			// var req = CustomRequest("PUT", header, URL, formData)
 
-	    			form := url.Values{}
-	    			form.Add("ip_port", viewForm.Ip+":"+viewForm.Port)
-	    			form.Add("type", viewForm.Type)
-	    			formJSON := form.Encode()
-	    			req, _ := http.NewRequest(http.MethodPut, URL, strings.NewReader(formJSON))
-	    			req.Header.Add("Content-Type", "application/x-www-form-urlencoded")
+		    			form := url.Values{}
+		    			form.Add("ip_port", viewForm.Ip+":"+viewForm.Port)
+		    			form.Add("type", viewForm.Type)
+		    			formJSON := form.Encode()
+		    			req, _ := http.NewRequest(http.MethodPut, URL, strings.NewReader(formJSON))
+		    			req.Header.Add("Content-Type", "application/x-www-form-urlencoded")
 
-	    			requestStore = append(requestStore, req)
-				}
-        	}
-		}
+		    			requestStore = append(requestStore, req)
+						}
+        }
+			}
 	}
 	return requestStore
 }
