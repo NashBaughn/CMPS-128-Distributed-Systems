@@ -1,5 +1,5 @@
-nbaughn - Worked on Dockerfile. Worked on system structure with the help of GOPATH. Work on maininstance. 
+nbaughn - Worked on Dockerfile. Worked on system structure with the help of GOPATH. Work on maininstance.
 
 riakenna - Helped implement partitioning logic, and created endpoint and requests for view updates.
 
-allfelt - Implemented forwarder logic, helped with Dockerfile, and handled PUT logic.
+allfelt - Debugged code to run on test script and pass the first two test cases. Provided utility functions and test code.
