@@ -1,0 +1,5 @@
+Alec Felt: 
+
+Riise Kennard:
+
+Nash Baughn: Worked on heartMointor package to ensure dead/resurrected node detection along with parition disconnect. Contributed to overall design and debugging for test cases found in the provided python script.  
