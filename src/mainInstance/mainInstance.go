@@ -223,14 +223,14 @@ func removeView(i int, j int) bool{
 		OldPart := _view[len(_view)-1]
 		//log.Print(OldPart)
 		OldNode := OldPart[len(OldPart)-1]
-		OldNode.Id = i
-		_view[i] = append(_view[i], OldNode)
 		if (_my_node.Ip == OldNode.Ip) {
 			_causal_Payload[_my_node.Id] = 0
 			_my_node.Id = i
 		} else if (_my_node.Id == i){
 			SendKVSMend(OldNode)
 		}
+		OldNode.Id = i
+		_view[i] = append(_view[i], OldNode)
 		if (len(OldPart) == 1){
 			_view = _view[:len(_view)-1]
 			//_causal_Payload = _causal_Payload[:len(_causal_Payload)-1]
@@ -252,10 +252,15 @@ func removeView(i int, j int) bool{
 func SendKVSMend (Node structs.NodeInfo) {
 	log.Print("In Send KVS Mend")
 	log.Print("Sending new KVS to: " + Node.Ip)
+	if (len(_view[Node.Id]) ==1) {
+		log.Print("Waiting for node to repartition")
+		time.Sleep(2 * time.Second)
+	}
     Ip := Node.Ip
 	Port := Node.Port
 	URL := "http://" + Ip + ":" + Port + "/KVSMend"
 	form := url.Values{}
+	form.Add("sender", _my_node.Ip)
 	for key, val := range GetKVS().Store {
 		form.Add("Key", key)
 		form.Add("Val", val)
@@ -280,6 +285,7 @@ func HandleKVSMend (w http.ResponseWriter, r *http.Request) {
     r.ParseForm()
 	newer := true
     Payload := r.PostForm["Payload"]
+	log.Print("requestings host: "+r.FormValue("sender"))
     var newPayload []int
 	log.Print("Length of my Payload: "+strconv.Itoa(len(_causal_Payload))+" Length of new Payload: "+strconv.Itoa(len(Payload)))
     for ind, my_num := range _causal_Payload {
@@ -416,8 +422,8 @@ func SendViewUpdate(w http.ResponseWriter, r *http.Request) {
 		// req.ParseForm()
 		log.Print("req: " + req.URL.String())
 		// log.Print("Node being deleted: "+req.PostForm["ip_port"][0])
-		_, err := client.Do(req)
-		ErrPanic(err)
+		_, _ = client.Do(req)
+		//ErrPanic(err)
 	}
 	// Reuses partition logic
 	PartitionHandler(w, r)
@@ -454,7 +460,7 @@ func PartitionHandler(w http.ResponseWriter, r *http.Request) {
 				new_part := []structs.NodeInfo{structs.NodeInfo{postForm.Ip, postForm.Port, i+1, true}}
 				_view = append(_view, new_part)
 				log.Print("Sending Repartition")
-				sendRepartition()
+				sendRepartition(_my_node.Id, _view)
 				_causal_Payload = append(_causal_Payload,0)
 			}
 		}
@@ -470,12 +476,25 @@ func PartitionHandler(w http.ResponseWriter, r *http.Request) {
 		// update view
 		log.Print("view before remove:")
 		PrintView()
+		Part := _view[len(_view)-1]
+		Temp := Part[len(Part)-1]
+		if (_my_node.Ip == Temp.Ip && len(Part) == 1){
+			log.Print("Im moving need to Repartition")
+			sendRepartition(-1, _view[:len(_view)-1])
+		} else {
+			log.Print("Waiting for node to repartition")
+			time.Sleep(2*time.Second)
+		}
 		partIndex, nodeIndex := findPartition(postForm.Ip)
 		ErrPanicStr(partIndex != -1, "ip does not exist!: "+postForm.Ip)
 		if removeView(partIndex, nodeIndex) {
-			sendRepartition()
+			if (_my_node.Ip != Temp.Ip || len(Part) != 1){
+
+				sendRepartition(_my_node.Id, _view)
+			}
 			_causal_Payload = _causal_Payload[:len(_causal_Payload)-1]
 		}
+
 		/*if (shift && node.Ip == _my_node.Ip){
 			for _, friend := range _view[node.Id] {
 				http.Get("http://" + friend.Ip + ":" + friend.Port + "/helpMe")
@@ -493,15 +512,15 @@ func PartitionHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 // repartition all keys in kvs and sends to new partition
-func sendRepartition() {
+func sendRepartition(ind int, view [][]structs.NodeInfo) {
 	log.Print("In Send Repartition")
 	log.Print("Num Keys before removing: "+strconv.Itoa(_KVS.NumKeys()))
-	requestMap := partition.Repartition(_my_node.Id, _view, _KVS)
+	requestMap := partition.Repartition(ind, view, _KVS)
 	log.Print("Num Keys adter removing: "+strconv.Itoa(_KVS.NumKeys()))
 	// Only send requests if the first alive node in partition
 	Head := findLiving(_my_node.Id)
-	if _my_node == Head {
-		requestList := httpLogic.CreatePartitionRequests(_view, requestMap)
+	if (_my_node == Head || ind == -1){
+		requestList := httpLogic.CreatePartitionRequests(view, requestMap)
 		// send requests to nodes for repartitioned keys
 		for _, req := range requestList {
 			client := &http.Client{
