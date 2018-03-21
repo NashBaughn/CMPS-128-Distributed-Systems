@@ -1,5 +1,0 @@
-Alec Felt: 
-
-Riise Kennard: Worked on logic for mending the network after nodes get resureccted. Additionally, view update had to be modified, and Riise was responsible for fixing this. Also contributed substantially to passing all test cases.
-
-Nash Baughn: Worked on heartMointor package to ensure dead/resurrected node detection along with parition disconnect. Contributed to overall design and debugging for test cases found in the provided python script.  

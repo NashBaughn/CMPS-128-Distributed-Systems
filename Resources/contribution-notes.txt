@@ -1,4 +1,4 @@
-nbaughn - Worked on Dockerfile. Worked on system structure with the help of GOPATH. Work on maininstance.
+nbaughn - Worked on heartMointor package to ensure dead/resurrected node detection along with parition disconnect. Contributed to overall design and debugging.
 
 riakenna - Helped implement partitioning logic, and created endpoint and requests for view updates.
 
